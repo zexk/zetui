@@ -9,7 +9,7 @@
  * @endcode
  * Every other translation unit includes the header without the define.
  *
- * @author Bouraoui Ochi
+ * @author zexk
  * @copyright Unlicense (public domain)
  */
 
