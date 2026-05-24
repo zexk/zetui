@@ -17,23 +17,23 @@ pub fn build(b: *std.Build) void {
     // Static library
     // ----------------------------------------------------------------
 
-    const lib = b.addStaticLibrary(.{
-        .name     = "zetui",
+    const lib_mod = b.createModule(.{
         .target   = target,
         .optimize = optimize,
+        .link_libc = true,
     });
-
-    lib.addCSourceFiles(.{
+    lib_mod.addCSourceFiles(.{
         .files = &.{"src/zetui.c"},
         .flags = c_flags,
     });
+    lib_mod.addIncludePath(b.path("include"));
 
-    lib.addIncludePath(b.path("include"));
-    lib.linkLibC();
-    b.installArtifact(lib);
-
-    // Install public headers alongside the library
+    const lib = b.addLibrary(.{
+        .name        = "zetui",
+        .root_module = lib_mod,
+    });
     lib.installHeadersDirectory(b.path("include"), ".", .{});
+    b.installArtifact(lib);
 
     // ----------------------------------------------------------------
     // Zig module (wraps the C lib with idiomatic Zig API)
@@ -41,6 +41,8 @@ pub fn build(b: *std.Build) void {
 
     const zetui_mod = b.addModule("zetui", .{
         .root_source_file = b.path("bindings/zetui.zig"),
+        .target           = target,
+        .optimize         = optimize,
     });
     zetui_mod.addIncludePath(b.path("include"));
     zetui_mod.linkLibrary(lib);
@@ -49,18 +51,22 @@ pub fn build(b: *std.Build) void {
     // C example
     // ----------------------------------------------------------------
 
-    const hello_c = b.addExecutable(.{
-        .name   = "hello-c",
-        .target = target,
-        .optimize = optimize,
+    const hello_c_mod = b.createModule(.{
+        .target    = target,
+        .optimize  = optimize,
+        .link_libc = true,
     });
-    hello_c.addCSourceFile(.{
-        .file  = b.path("examples/hello.c"),
+    hello_c_mod.addCSourceFiles(.{
+        .files = &.{"examples/hello.c"},
         .flags = c_flags,
     });
-    hello_c.addIncludePath(b.path("include"));
-    hello_c.linkLibrary(lib);
-    hello_c.linkLibC();
+    hello_c_mod.addIncludePath(b.path("include"));
+    hello_c_mod.linkLibrary(lib);
+
+    const hello_c = b.addExecutable(.{
+        .name        = "hello-c",
+        .root_module = hello_c_mod,
+    });
     b.installArtifact(hello_c);
 
     const run_hello_c      = b.addRunArtifact(hello_c);
@@ -71,13 +77,17 @@ pub fn build(b: *std.Build) void {
     // Zig example
     // ----------------------------------------------------------------
 
-    const hello_zig = b.addExecutable(.{
-        .name             = "hello-zig",
+    const hello_zig_mod = b.createModule(.{
         .root_source_file = b.path("examples/hello.zig"),
         .target           = target,
         .optimize         = optimize,
     });
-    hello_zig.root_module.addImport("zetui", zetui_mod);
+    hello_zig_mod.addImport("zetui", zetui_mod);
+
+    const hello_zig = b.addExecutable(.{
+        .name        = "hello-zig",
+        .root_module = hello_zig_mod,
+    });
     b.installArtifact(hello_zig);
 
     const run_hello_zig      = b.addRunArtifact(hello_zig);
@@ -85,21 +95,25 @@ pub fn build(b: *std.Build) void {
     run_hello_zig_step.dependOn(&run_hello_zig.step);
 
     // ----------------------------------------------------------------
-    // Feature demo
+    // C feature demo
     // ----------------------------------------------------------------
 
-    const demo = b.addExecutable(.{
-        .name     = "demo",
-        .target   = target,
-        .optimize = optimize,
+    const demo_mod = b.createModule(.{
+        .target    = target,
+        .optimize  = optimize,
+        .link_libc = true,
     });
-    demo.addCSourceFile(.{
-        .file  = b.path("examples/demo.c"),
+    demo_mod.addCSourceFiles(.{
+        .files = &.{"examples/demo.c"},
         .flags = c_flags,
     });
-    demo.addIncludePath(b.path("include"));
-    demo.linkLibrary(lib);
-    demo.linkLibC();
+    demo_mod.addIncludePath(b.path("include"));
+    demo_mod.linkLibrary(lib);
+
+    const demo = b.addExecutable(.{
+        .name        = "demo",
+        .root_module = demo_mod,
+    });
     b.installArtifact(demo);
 
     const run_demo      = b.addRunArtifact(demo);
@@ -110,14 +124,17 @@ pub fn build(b: *std.Build) void {
     // Zig feature demo
     // ----------------------------------------------------------------
 
-    const demo_zig = b.addExecutable(.{
-        .name             = "demo-zig",
+    const demo_zig_mod = b.createModule(.{
         .root_source_file = b.path("examples/demo.zig"),
         .target           = target,
         .optimize         = optimize,
     });
-    demo_zig.root_module.addImport("zetui", zetui_mod);
-    demo_zig.addIncludePath(b.path("include")); // needed for @cImport inside bindings
+    demo_zig_mod.addImport("zetui", zetui_mod);
+
+    const demo_zig = b.addExecutable(.{
+        .name        = "demo-zig",
+        .root_module = demo_zig_mod,
+    });
     b.installArtifact(demo_zig);
 
     const run_demo_zig      = b.addRunArtifact(demo_zig);

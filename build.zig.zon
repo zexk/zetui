@@ -1,7 +1,8 @@
 .{
-    .name = "zetui",
+    .name = .zetui,
+    .fingerprint = 0x4c669c8128257da6,
     .version = "0.1.0",
-    .minimum_zig_version = "0.13.0",
+    .minimum_zig_version = "0.14.0",
     .paths = .{"."},
     .dependencies = .{},
 }
