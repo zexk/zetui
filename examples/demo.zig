@@ -536,7 +536,7 @@ pub fn main() !void {
 
     var sel:   usize = 0;
     var total: i32   = 0;
-    var last   = zetui.Event.none;
+    var last: zetui.Event = .none;
     var running = true;
 
     while (running) {
