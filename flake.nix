@@ -11,19 +11,15 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
       in {
-
-        # -----------------------------------------------------------
-        # Development shell
-        # -----------------------------------------------------------
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             zig
-            zls        # Zig Language Server
+            zls
             gcc
             gdb
             valgrind
-            bear       # generates compile_commands.json for clangd
-            clang-tools # clangd, clang-format
+            bear
+            clang-tools
           ];
 
           shellHook = ''
