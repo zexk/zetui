@@ -20,6 +20,7 @@
             valgrind
             bear
             clang-tools
+            doxygen
           ];
 
           shellHook = ''
@@ -29,6 +30,7 @@
             echo "  zig build run-hello-c   run C example"
             echo "  zig build run-hello-zig run Zig example"
             echo "  bear -- zig build       regenerate compile_commands.json"
+            echo "  doxygen Doxyfile        generate HTML docs -> docs/html/"
             echo ""
           '';
         };

@@ -1,15 +1,16 @@
-/*
- * zetui.h -- single-header ANSI/C89 TUI library (STB style)
+/**
+ * @file zetui.h
+ * @brief Single-header ANSI/C89 terminal UI library (STB style).
  *
- * USAGE
- *   In exactly one translation unit:
- *       #define ZETUI_IMPLEMENTATION
- *       #include "zetui.h"
+ * In exactly one translation unit define the implementation before including:
+ * @code
+ *   #define ZETUI_IMPLEMENTATION
+ *   #include "zetui.h"
+ * @endcode
+ * Every other translation unit includes the header without the define.
  *
- *   In every other translation unit (declarations only):
- *       #include "zetui.h"
- *
- * LICENSE: Unlicense (public domain)
+ * @author Bouraoui Ochi
+ * @copyright Unlicense (public domain)
  */
 
 #ifndef ZETUI_H
@@ -24,97 +25,129 @@ extern "C"
     /*  Portability typedefs (no <stdint.h> in C89)                       */
     /* ================================================================== */
 
+    /** @brief Unsigned 8-bit integer (no <stdint.h> in C89). */
     typedef unsigned char zetui_u8;
+    /** @brief Unsigned 16-bit integer. */
     typedef unsigned short zetui_u16;
+    /** @brief Signed 32-bit integer. */
     typedef int zetui_i32;
+    /** @brief Unsigned 32-bit integer (used for Unicode codepoints). */
     typedef unsigned int zetui_u32;
 
     /* ================================================================== */
     /*  Error codes                                                        */
     /* ================================================================== */
 
+    /**
+     * @brief Return codes used by functions that can fail.
+     */
     typedef enum zetui_error
     {
-        ZETUI_OK = 0,
-        ZETUI_ERR_NOMEM = -1,
-        ZETUI_ERR_IO = -2,
-        ZETUI_ERR_NOT_A_TTY = -3,
-        ZETUI_ERR_UNSUPPORTED = -4,
-        ZETUI_ERR_TIMEOUT = -5
+        ZETUI_OK = 0,             /**< Success. */
+        ZETUI_ERR_NOMEM = -1,     /**< Memory allocation failed. */
+        ZETUI_ERR_IO = -2,        /**< Terminal I/O error. */
+        ZETUI_ERR_NOT_A_TTY = -3, /**< stdout is not a TTY. */
+        ZETUI_ERR_UNSUPPORTED = -4, /**< Feature not supported by terminal. */
+        ZETUI_ERR_TIMEOUT = -5    /**< Wait timed out with no event. */
     } zetui_error_t;
 
     /* ================================================================== */
     /*  Colors                                                             */
     /* ================================================================== */
 
+    /**
+     * @brief ANSI terminal colors (16 named + default).
+     *
+     * Use @c ZETUI_COLOR_DEFAULT to leave the terminal's default color in
+     * place for the foreground or background.
+     */
     typedef enum zetui_color
     {
-        ZETUI_COLOR_DEFAULT = -1,
-        ZETUI_COLOR_BLACK = 0,
-        ZETUI_COLOR_RED = 1,
-        ZETUI_COLOR_GREEN = 2,
-        ZETUI_COLOR_YELLOW = 3,
-        ZETUI_COLOR_BLUE = 4,
-        ZETUI_COLOR_MAGENTA = 5,
-        ZETUI_COLOR_CYAN = 6,
-        ZETUI_COLOR_WHITE = 7,
-        ZETUI_COLOR_BRIGHT_BLACK = 8,
-        ZETUI_COLOR_BRIGHT_RED = 9,
-        ZETUI_COLOR_BRIGHT_GREEN = 10,
-        ZETUI_COLOR_BRIGHT_YELLOW = 11,
-        ZETUI_COLOR_BRIGHT_BLUE = 12,
-        ZETUI_COLOR_BRIGHT_MAGENTA = 13,
-        ZETUI_COLOR_BRIGHT_CYAN = 14,
-        ZETUI_COLOR_BRIGHT_WHITE = 15
+        ZETUI_COLOR_DEFAULT = -1,       /**< Terminal default color. */
+        ZETUI_COLOR_BLACK = 0,          /**< Black (ANSI 0). */
+        ZETUI_COLOR_RED = 1,            /**< Red. */
+        ZETUI_COLOR_GREEN = 2,          /**< Green. */
+        ZETUI_COLOR_YELLOW = 3,         /**< Yellow. */
+        ZETUI_COLOR_BLUE = 4,           /**< Blue. */
+        ZETUI_COLOR_MAGENTA = 5,        /**< Magenta. */
+        ZETUI_COLOR_CYAN = 6,           /**< Cyan. */
+        ZETUI_COLOR_WHITE = 7,          /**< White. */
+        ZETUI_COLOR_BRIGHT_BLACK = 8,   /**< Bright black (dark grey). */
+        ZETUI_COLOR_BRIGHT_RED = 9,     /**< Bright red. */
+        ZETUI_COLOR_BRIGHT_GREEN = 10,  /**< Bright green. */
+        ZETUI_COLOR_BRIGHT_YELLOW = 11, /**< Bright yellow. */
+        ZETUI_COLOR_BRIGHT_BLUE = 12,   /**< Bright blue. */
+        ZETUI_COLOR_BRIGHT_MAGENTA = 13,/**< Bright magenta. */
+        ZETUI_COLOR_BRIGHT_CYAN = 14,   /**< Bright cyan. */
+        ZETUI_COLOR_BRIGHT_WHITE = 15   /**< Bright white. */
     } zetui_color_t;
 
     /* ================================================================== */
     /*  Cell attributes                                                    */
     /* ================================================================== */
 
-#define ZETUI_ATTR_NONE 0u
-#define ZETUI_ATTR_BOLD (1u << 0)
-#define ZETUI_ATTR_DIM (1u << 1)
-#define ZETUI_ATTR_ITALIC (1u << 2)
-#define ZETUI_ATTR_UNDERLINE (1u << 3)
-#define ZETUI_ATTR_BLINK (1u << 4)
-#define ZETUI_ATTR_REVERSE (1u << 5)
-#define ZETUI_ATTR_HIDDEN (1u << 6)
-#define ZETUI_ATTR_STRIKE (1u << 7)
+    /** @defgroup attrs Cell Attributes
+     *  @brief Bitfield flags OR-combined into @c zetui_style_t.attrs.
+     *  @{
+     */
+#define ZETUI_ATTR_NONE      0u         /**< No attributes. */
+#define ZETUI_ATTR_BOLD      (1u << 0)  /**< Bold / increased intensity. */
+#define ZETUI_ATTR_DIM       (1u << 1)  /**< Dim / decreased intensity. */
+#define ZETUI_ATTR_ITALIC    (1u << 2)  /**< Italic (terminal support varies). */
+#define ZETUI_ATTR_UNDERLINE (1u << 3)  /**< Single underline. */
+#define ZETUI_ATTR_BLINK     (1u << 4)  /**< Slow blink (terminal support varies). */
+#define ZETUI_ATTR_REVERSE   (1u << 5)  /**< Swap foreground and background. */
+#define ZETUI_ATTR_HIDDEN    (1u << 6)  /**< Invisible text. */
+#define ZETUI_ATTR_STRIKE    (1u << 7)  /**< Strikethrough. */
+    /** @} */
 
     /* ================================================================== */
     /*  Cell                                                               */
     /* ================================================================== */
 
+    /**
+     * @brief A single terminal cell (codepoint + style).
+     */
     typedef struct zetui_cell
     {
-        zetui_u32 ch; /* Unicode codepoint; 0 treated as space */
-        zetui_i32 fg; /* zetui_color_t or ZETUI_COLOR_DEFAULT  */
-        zetui_i32 bg;
-        zetui_u32 attrs;
+        zetui_u32 ch;    /**< Unicode codepoint; 0 is treated as a space. */
+        zetui_i32 fg;    /**< Foreground color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
+        zetui_i32 bg;    /**< Background color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
+        zetui_u32 attrs; /**< Attribute flags (@c ZETUI_ATTR_* OR-combined). */
     } zetui_cell_t;
 
     /* ================================================================== */
     /*  Style                                                              */
     /* ================================================================== */
 
+    /**
+     * @brief Foreground color, background color, and attribute flags.
+     *
+     * Zero-initialize for terminal defaults with no attributes.
+     */
     typedef struct zetui_style
     {
-        zetui_i32 fg;
-        zetui_i32 bg;
-        zetui_u32 attrs;
+        zetui_i32 fg;    /**< Foreground color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
+        zetui_i32 bg;    /**< Background color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
+        zetui_u32 attrs; /**< Attribute flags (@c ZETUI_ATTR_* OR-combined). */
     } zetui_style_t;
 
     /* ================================================================== */
     /*  Key codes                                                          */
     /* ================================================================== */
 
+    /**
+     * @brief Special key identifiers.
+     *
+     * Printable characters are reported via @c zetui_key_event_t.ch (Unicode
+     * codepoint) and @c key is set to @c ZETUI_KEY_NONE.
+     */
     typedef enum zetui_key
     {
-        ZETUI_KEY_NONE = 0,
+        ZETUI_KEY_NONE = 0,          /**< No special key; check @c ch. */
         ZETUI_KEY_CTRL_A = 1,
         ZETUI_KEY_CTRL_B = 2,
-        ZETUI_KEY_CTRL_C = 3,
+        ZETUI_KEY_CTRL_C = 3,        /**< Interrupt (Ctrl-C). */
         ZETUI_KEY_CTRL_D = 4,
         ZETUI_KEY_CTRL_E = 5,
         ZETUI_KEY_CTRL_F = 6,
@@ -160,72 +193,105 @@ extern "C"
         ZETUI_KEY_F12 = 277
     } zetui_key_t;
 
-#define ZETUI_MOD_NONE 0u
-#define ZETUI_MOD_SHIFT (1u << 0)
-#define ZETUI_MOD_ALT (1u << 1)
-#define ZETUI_MOD_CTRL (1u << 2)
+    /** @defgroup mods Key Modifiers
+     *  @brief Bitfield flags for modifier keys, set in @c zetui_key_event_t.mods.
+     *  @{
+     */
+#define ZETUI_MOD_NONE  0u        /**< No modifier. */
+#define ZETUI_MOD_SHIFT (1u << 0) /**< Shift held. */
+#define ZETUI_MOD_ALT   (1u << 1) /**< Alt / Meta held. */
+#define ZETUI_MOD_CTRL  (1u << 2) /**< Ctrl held. */
+    /** @} */
 
     /* ================================================================== */
     /*  Events                                                             */
     /* ================================================================== */
 
+    /** @brief Discriminator for @c zetui_event_t. */
     typedef enum zetui_event_type
     {
-        ZETUI_EVENT_NONE = 0,
-        ZETUI_EVENT_KEY = 1,
-        ZETUI_EVENT_RESIZE = 2
+        ZETUI_EVENT_NONE = 0,   /**< No event (poll returned immediately). */
+        ZETUI_EVENT_KEY = 1,    /**< Keyboard event; see @c data.key. */
+        ZETUI_EVENT_RESIZE = 2  /**< Terminal was resized; see @c data.resize. */
     } zetui_event_type_t;
 
+    /** @brief Keyboard event payload. */
     typedef struct zetui_key_event
     {
-        zetui_key_t key;
-        zetui_u32 ch; /* Unicode codepoint for printable characters */
-        zetui_u32 mods;
+        zetui_key_t key;  /**< Special key code, or @c ZETUI_KEY_NONE for printable. */
+        zetui_u32   ch;   /**< Unicode codepoint (printable chars). */
+        zetui_u32   mods; /**< Active modifier flags (@c ZETUI_MOD_*). */
     } zetui_key_event_t;
 
+    /** @brief Terminal resize event payload. */
     typedef struct zetui_resize_event
     {
-        int width;
-        int height;
+        int width;  /**< New terminal width in columns. */
+        int height; /**< New terminal height in rows. */
     } zetui_resize_event_t;
 
+    /** @brief Union of all event payloads. */
     typedef union zetui_event_data
     {
-        zetui_key_event_t key;
-        zetui_resize_event_t resize;
+        zetui_key_event_t    key;    /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_KEY. */
+        zetui_resize_event_t resize; /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_RESIZE. */
     } zetui_event_data_t;
 
+    /**
+     * @brief A terminal event (key press or resize).
+     *
+     * Check @c type first, then access the appropriate field of @c data.
+     */
     typedef struct zetui_event
     {
-        zetui_event_type_t type;
-        zetui_event_data_t data;
+        zetui_event_type_t type; /**< Event discriminator. */
+        zetui_event_data_t data; /**< Event payload. */
     } zetui_event_t;
 
     /* ================================================================== */
     /*  Opaque context                                                     */
     /* ================================================================== */
 
+    /**
+     * @brief Opaque handle returned by zetui_init().
+     *
+     * All API functions take a pointer to this type. The internal layout is
+     * private; allocate only via zetui_init() and free via zetui_shutdown().
+     */
     typedef struct zetui_ctx zetui_ctx_t;
 
     /* ================================================================== */
     /*  Box-drawing codepoint tables                                       */
     /* ================================================================== */
 
+    /**
+     * @brief Unicode codepoints for light box-drawing characters.
+     * @see ZETUI_BOX_TL and friends for index constants.
+     */
     extern const zetui_u32 zetui_box_light[11];
+
+    /** @brief Unicode codepoints for heavy box-drawing characters. */
     extern const zetui_u32 zetui_box_heavy[11];
+
+    /** @brief Unicode codepoints for double box-drawing characters. */
     extern const zetui_u32 zetui_box_double[11];
 
-#define ZETUI_BOX_TL 0 /* top-left corner    ┌ */
-#define ZETUI_BOX_TR 1 /* top-right corner   ┐ */
-#define ZETUI_BOX_BL 2 /* bottom-left corner └ */
-#define ZETUI_BOX_BR 3 /* bottom-right corner┘ */
-#define ZETUI_BOX_H 4  /* horizontal line    ─ */
-#define ZETUI_BOX_V 5  /* vertical line      │ */
-#define ZETUI_BOX_LT 6 /* left T-junction    ├ */
-#define ZETUI_BOX_RT 7 /* right T-junction   ┤ */
-#define ZETUI_BOX_TT 8 /* top T-junction     ┬ */
-#define ZETUI_BOX_BT 9 /* bottom T-junction  ┴ */
-#define ZETUI_BOX_X 10 /* cross              ┼ */
+    /** @defgroup box_idx Box Index Constants
+     *  @brief Indices into @c zetui_box_light / @c zetui_box_heavy / @c zetui_box_double.
+     *  @{
+     */
+#define ZETUI_BOX_TL 0  /**< Top-left corner     ┌ */
+#define ZETUI_BOX_TR 1  /**< Top-right corner    ┐ */
+#define ZETUI_BOX_BL 2  /**< Bottom-left corner  └ */
+#define ZETUI_BOX_BR 3  /**< Bottom-right corner ┘ */
+#define ZETUI_BOX_H  4  /**< Horizontal line     ─ */
+#define ZETUI_BOX_V  5  /**< Vertical line       │ */
+#define ZETUI_BOX_LT 6  /**< Left T-junction     ├ */
+#define ZETUI_BOX_RT 7  /**< Right T-junction    ┤ */
+#define ZETUI_BOX_TT 8  /**< Top T-junction      ┬ */
+#define ZETUI_BOX_BT 9  /**< Bottom T-junction   ┴ */
+#define ZETUI_BOX_X  10 /**< Cross               ┼ */
+    /** @} */
 
     /* ================================================================== */
     /*  Public API                                                         */
@@ -233,46 +299,179 @@ extern "C"
 
     /* --- Lifecycle ---------------------------------------------------- */
 
+    /**
+     * @brief Initialise zetui: enter raw mode and alternate screen.
+     * @return Allocated context, or NULL if stdout is not a TTY or on error.
+     */
     zetui_ctx_t *zetui_init (void);
+
+    /**
+     * @brief Restore terminal state and free the context.
+     * @param ctx Context previously returned by zetui_init().
+     */
     void zetui_shutdown (zetui_ctx_t *ctx);
 
     /* --- Terminal info ------------------------------------------------ */
 
+    /**
+     * @brief Current terminal width in columns.
+     * @param ctx Initialised context.
+     * @return Column count; updated after each @c ZETUI_EVENT_RESIZE.
+     */
     int zetui_width (const zetui_ctx_t *ctx);
+
+    /**
+     * @brief Current terminal height in rows.
+     * @param ctx Initialised context.
+     * @return Row count; updated after each @c ZETUI_EVENT_RESIZE.
+     */
     int zetui_height (const zetui_ctx_t *ctx);
 
     /* --- Back-buffer drawing ------------------------------------------ */
 
+    /**
+     * @brief Fill the back buffer with blank cells (terminal default style).
+     * @param ctx Initialised context.
+     */
     void zetui_clear (zetui_ctx_t *ctx);
+
+    /**
+     * @brief Write a single cell to the back buffer.
+     *
+     * Out-of-bounds coordinates are silently ignored.
+     * @param ctx  Initialised context.
+     * @param x    Column (0-based).
+     * @param y    Row (0-based).
+     * @param cell Cell value to write.
+     */
     void zetui_set_cell (zetui_ctx_t *ctx, int x, int y, zetui_cell_t cell);
+
+    /**
+     * @brief Read a cell from the back buffer.
+     *
+     * Returns a blank cell for out-of-bounds coordinates.
+     * @param ctx Initialised context.
+     * @param x   Column (0-based).
+     * @param y   Row (0-based).
+     * @return    Copy of the cell currently in the buffer.
+     */
     zetui_cell_t zetui_get_cell (const zetui_ctx_t *ctx, int x, int y);
+
+    /**
+     * @brief Diff the back buffer against the front buffer and flush to the terminal.
+     *
+     * Only changed cells are emitted. Swaps front and back buffers on success.
+     * @param ctx Initialised context.
+     * @return @c ZETUI_OK on success, @c ZETUI_ERR_IO on write failure.
+     */
     zetui_error_t zetui_present (zetui_ctx_t *ctx);
 
     /* --- Input -------------------------------------------------------- */
 
+    /**
+     * @brief Non-blocking event poll.
+     * @param ctx Initialised context.
+     * @return The next event, or an event with @c type == @c ZETUI_EVENT_NONE
+     *         if no input is available.
+     */
     zetui_event_t zetui_poll_event (zetui_ctx_t *ctx);
+
+    /**
+     * @brief Blocking event wait with optional timeout.
+     * @param ctx        Initialised context.
+     * @param timeout_ms Milliseconds to wait; -1 blocks indefinitely.
+     * @return The next event. @c type == @c ZETUI_EVENT_NONE on timeout.
+     */
     zetui_event_t zetui_wait_event (zetui_ctx_t *ctx, int timeout_ms);
 
     /* --- Drawing helpers ---------------------------------------------- */
 
+    /**
+     * @brief Return a style with terminal-default foreground, background,
+     *        and no attributes.
+     */
     zetui_style_t zetui_style_default (void);
+
+    /**
+     * @brief Construct a @c zetui_cell_t from a codepoint and style.
+     * @param ch    Unicode codepoint.
+     * @param style Visual style.
+     */
     zetui_cell_t zetui_cell_make (zetui_u32 ch, zetui_style_t style);
 
+    /**
+     * @brief Draw a NUL-terminated UTF-8 string to the back buffer.
+     * @param ctx   Initialised context.
+     * @param x     Starting column.
+     * @param y     Row.
+     * @param str   NUL-terminated UTF-8 string.
+     * @param style Visual style applied to every cell.
+     */
     void zetui_draw_str (zetui_ctx_t *ctx, int x, int y, const char *str,
                          zetui_style_t style);
+
+    /**
+     * @brief Draw a light box-drawing rectangle.
+     * @param ctx   Initialised context.
+     * @param x     Left column.
+     * @param y     Top row.
+     * @param w     Width in columns (must be >= 2).
+     * @param h     Height in rows (must be >= 2).
+     * @param style Visual style for all border cells.
+     */
     void zetui_draw_box (zetui_ctx_t *ctx, int x, int y, int w, int h,
                          zetui_style_t style);
+
+    /**
+     * @brief Fill a rectangular region with a single cell.
+     * @param ctx  Initialised context.
+     * @param x    Left column.
+     * @param y    Top row.
+     * @param w    Width in columns.
+     * @param h    Height in rows.
+     * @param cell Cell written to every position in the rectangle.
+     */
     void zetui_fill_rect (zetui_ctx_t *ctx, int x, int y, int w, int h,
                           zetui_cell_t cell);
+
+    /**
+     * @brief Draw a horizontal line of a single codepoint.
+     * @param ctx   Initialised context.
+     * @param x     Starting column.
+     * @param y     Row.
+     * @param len   Number of cells to fill.
+     * @param ch    Unicode codepoint to repeat.
+     * @param style Visual style.
+     */
     void zetui_draw_hline (zetui_ctx_t *ctx, int x, int y, int len,
                            zetui_u32 ch, zetui_style_t style);
+
+    /**
+     * @brief Draw a vertical line of a single codepoint.
+     * @param ctx   Initialised context.
+     * @param x     Column.
+     * @param y     Starting row.
+     * @param len   Number of cells to fill.
+     * @param ch    Unicode codepoint to repeat.
+     * @param style Visual style.
+     */
     void zetui_draw_vline (zetui_ctx_t *ctx, int x, int y, int len,
                            zetui_u32 ch, zetui_style_t style);
 
     /* --- Cursor ------------------------------------------------------- */
 
+    /** @brief Hide the hardware cursor. @param ctx Initialised context. */
     void zetui_cursor_hide (zetui_ctx_t *ctx);
+
+    /** @brief Show the hardware cursor. @param ctx Initialised context. */
     void zetui_cursor_show (zetui_ctx_t *ctx);
+
+    /**
+     * @brief Move the hardware cursor to (x, y).
+     * @param ctx Initialised context.
+     * @param x   Column (0-based).
+     * @param y   Row (0-based).
+     */
     void zetui_cursor_move (zetui_ctx_t *ctx, int x, int y);
 
     /* ================================================================== */
