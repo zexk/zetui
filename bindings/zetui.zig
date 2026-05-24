@@ -54,6 +54,13 @@ pub const Attr = struct {
     pub const strike    = c.ZETUI_ATTR_STRIKE;
 };
 
+pub const Mod = struct {
+    pub const none  = c.ZETUI_MOD_NONE;
+    pub const shift = c.ZETUI_MOD_SHIFT;
+    pub const alt   = c.ZETUI_MOD_ALT;
+    pub const ctrl  = c.ZETUI_MOD_CTRL;
+};
+
 pub const Key = enum(c_int) {
     none        = c.ZETUI_KEY_NONE,
     ctrl_a      = c.ZETUI_KEY_CTRL_A,
@@ -104,6 +111,36 @@ pub const Key = enum(c_int) {
     f12         = c.ZETUI_KEY_F12,
     _,
 };
+
+// ------------------------------------------------------------------ //
+// Box-drawing tables                                                  //
+// ------------------------------------------------------------------ //
+
+/// Indices into a box codepoint table.
+pub const Box = struct {
+    pub const tl: usize = c.ZETUI_BOX_TL;
+    pub const tr: usize = c.ZETUI_BOX_TR;
+    pub const bl: usize = c.ZETUI_BOX_BL;
+    pub const br: usize = c.ZETUI_BOX_BR;
+    pub const h:  usize = c.ZETUI_BOX_H;
+    pub const v:  usize = c.ZETUI_BOX_V;
+    pub const lt: usize = c.ZETUI_BOX_LT;
+    pub const rt: usize = c.ZETUI_BOX_RT;
+    pub const tt: usize = c.ZETUI_BOX_TT;
+    pub const bt: usize = c.ZETUI_BOX_BT;
+    pub const x:  usize = c.ZETUI_BOX_X;
+};
+
+pub const BoxVariant = enum { light, heavy, double };
+
+/// Return the Unicode codepoint at `idx` from the chosen box table.
+pub fn boxCp(variant: BoxVariant, idx: usize) u21 {
+    return @intCast(switch (variant) {
+        .light  => c.zetui_box_light[idx],
+        .heavy  => c.zetui_box_heavy[idx],
+        .double => c.zetui_box_double[idx],
+    });
+}
 
 // ------------------------------------------------------------------ //
 // Style                                                               //

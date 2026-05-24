@@ -83,4 +83,44 @@ pub fn build(b: *std.Build) void {
     const run_hello_zig      = b.addRunArtifact(hello_zig);
     const run_hello_zig_step = b.step("run-hello-zig", "Run the Zig example");
     run_hello_zig_step.dependOn(&run_hello_zig.step);
+
+    // ----------------------------------------------------------------
+    // Feature demo
+    // ----------------------------------------------------------------
+
+    const demo = b.addExecutable(.{
+        .name     = "demo",
+        .target   = target,
+        .optimize = optimize,
+    });
+    demo.addCSourceFile(.{
+        .file  = b.path("examples/demo.c"),
+        .flags = c_flags,
+    });
+    demo.addIncludePath(b.path("include"));
+    demo.linkLibrary(lib);
+    demo.linkLibC();
+    b.installArtifact(demo);
+
+    const run_demo      = b.addRunArtifact(demo);
+    const run_demo_step = b.step("run-demo", "Run the full feature demo");
+    run_demo_step.dependOn(&run_demo.step);
+
+    // ----------------------------------------------------------------
+    // Zig feature demo
+    // ----------------------------------------------------------------
+
+    const demo_zig = b.addExecutable(.{
+        .name             = "demo-zig",
+        .root_source_file = b.path("examples/demo.zig"),
+        .target           = target,
+        .optimize         = optimize,
+    });
+    demo_zig.root_module.addImport("zetui", zetui_mod);
+    demo_zig.addIncludePath(b.path("include")); // needed for @cImport inside bindings
+    b.installArtifact(demo_zig);
+
+    const run_demo_zig      = b.addRunArtifact(demo_zig);
+    const run_demo_zig_step = b.step("run-demo-zig", "Run the Zig feature demo");
+    run_demo_zig_step.dependOn(&run_demo_zig.step);
 }
