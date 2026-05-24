@@ -1,0 +1,183 @@
+/**
+ * @page zig_bindings Zig Bindings
+ * @tableofcontents
+ *
+ * Idiomatic Zig wrapper around the zetui C API.
+ * Source: `bindings/zetui.zig`. Import via the module exposed by `build.zig`:
+ *
+ * @code{.zig}
+ * const zetui = @import("zetui");
+ * @endcode
+ *
+ * @section zig_quickstart Quick start
+ *
+ * @code{.zig}
+ * var tui = try zetui.Context.init();
+ * defer tui.deinit();
+ * tui.cursorHide();
+ * var running = true;
+ * while (running) {
+ *     tui.clear();
+ *     tui.drawStr(1, 1, "hello", .{});
+ *     try tui.present();
+ *     switch (tui.waitEvent(-1)) {
+ *         .key => |ke| if (ke.ch == 'q') running = false,
+ *         else => {},
+ *     }
+ * }
+ * @endcode
+ *
+ * See `examples/hello.zig` and `examples/demo.zig` for complete programs.
+ *
+ * ---
+ *
+ * @section zig_context Context
+ *
+ * **`Context`** — owns the terminal session. All drawing and event methods
+ * live here.
+ *
+ * | Method | Description |
+ * |--------|-------------|
+ * | `Context.init() Error!Context` | Open the TUI on the controlling terminal. |
+ * | `deinit(*Context) void` | Restore terminal state and free all resources. |
+ * | `width(*const Context) i32` | Terminal width in columns. |
+ * | `height(*const Context) i32` | Terminal height in rows. |
+ * | `clear(*Context) void` | Erase the back buffer. |
+ * | `present(*Context) Error!void` | Flush back buffer to the terminal. |
+ * | `setCell(*Context, x, y, Cell) void` | Write one cell to the back buffer. |
+ * | `getCell(*const Context, x, y) Cell` | Read one cell from the back buffer. |
+ * | `pollEvent(*Context) Event` | Non-blocking event poll. |
+ * | `waitEvent(*Context, timeout_ms: i32) Event` | Blocking wait; pass `-1` to block forever. |
+ * | `drawStr(*Context, x, y, [*:0]const u8, Style) void` | Draw a null-terminated UTF-8 string. |
+ * | `drawSlice(*Context, x, y, []const u8, Style) void` | Draw a Zig slice (copies to a 4 KB stack buffer). |
+ * | `drawBox(*Context, x, y, w, h, Style) void` | Draw a light box border. |
+ * | `fillRect(*Context, x, y, w, h, Cell) void` | Fill a rectangle with a single cell. |
+ * | `drawHline(*Context, x, y, len, ch: u21, Style) void` | Draw a horizontal line with the given codepoint. |
+ * | `drawVline(*Context, x, y, len, ch: u21, Style) void` | Draw a vertical line with the given codepoint. |
+ * | `cursorHide(*Context) void` | Hide the hardware cursor. |
+ * | `cursorShow(*Context) void` | Show the hardware cursor. |
+ * | `cursorMove(*Context, x, y: i32) void` | Move the hardware cursor. |
+ *
+ * ---
+ *
+ * @section zig_style Style and Cell
+ *
+ * **`Style`** — text appearance.
+ *
+ * @code{.zig}
+ * pub const Style = struct {
+ *     fg:    Color = .default,
+ *     bg:    Color = .default,
+ *     attrs: u32   = Attr.none,
+ * };
+ * @endcode
+ *
+ * **`Cell`** — one terminal cell (codepoint + style).
+ *
+ * @code{.zig}
+ * pub const Cell = struct {
+ *     ch:    u32   = ' ',
+ *     style: Style = .{},
+ * };
+ * @endcode
+ *
+ * ---
+ *
+ * @section zig_color Color
+ *
+ * **`Color`** — `enum(i32)` wrapping the C color constants.
+ *
+ * | Value | Description |
+ * |-------|-------------|
+ * | `.default` | Terminal default color |
+ * | `.black` `.red` `.green` `.yellow` `.blue` `.magenta` `.cyan` `.white` | Standard 8 colors |
+ * | `.bright_black` … `.bright_white` | Bright variants |
+ *
+ * ---
+ *
+ * @section zig_attr Attr
+ *
+ * **`Attr`** — namespace of `u32` constants, combine with bitwise OR.
+ *
+ * `none` `bold` `dim` `italic` `underline` `blink` `reverse` `hidden` `strike`
+ *
+ * @code{.zig}
+ * const style = zetui.Style{ .attrs = zetui.Attr.bold | zetui.Attr.underline };
+ * @endcode
+ *
+ * ---
+ *
+ * @section zig_mod Mod
+ *
+ * **`Mod`** — keyboard modifier bitmask constants.
+ *
+ * `none` `shift` `alt` `ctrl`
+ *
+ * Check via `KeyEvent.mods & zetui.Mod.ctrl`.
+ *
+ * ---
+ *
+ * @section zig_key Key
+ *
+ * **`Key`** — `enum(c_int)` for named keys. Printable characters arrive with
+ * `Key.none` and a non-zero `KeyEvent.ch`.
+ *
+ * Named keys: `ctrl_a`–`ctrl_z`, `backspace`, `tab`, `enter`, `esc`, `del`,
+ * `arrow_up`, `arrow_down`, `arrow_left`, `arrow_right`, `home`, `end`,
+ * `page_up`, `page_down`, `insert`, `delete`, `f1`–`f12`.
+ *
+ * ---
+ *
+ * @section zig_events Events
+ *
+ * **`Event`** — tagged union returned by `pollEvent` / `waitEvent`.
+ *
+ * @code{.zig}
+ * pub const Event = union(enum) {
+ *     none,
+ *     key:    KeyEvent,
+ *     resize: ResizeEvent,
+ * };
+ * @endcode
+ *
+ * **`KeyEvent`**
+ *
+ * | Field | Type | Description |
+ * |-------|------|-------------|
+ * | `key` | `Key` | Named key, or `.none` for printable chars |
+ * | `ch` | `u21` | Unicode codepoint (0 for special keys) |
+ * | `mods` | `u32` | Modifier bitmask (`Mod.*`) |
+ *
+ * **`ResizeEvent`**
+ *
+ * | Field | Type | Description |
+ * |-------|------|-------------|
+ * | `width` | `i32` | New terminal width |
+ * | `height` | `i32` | New terminal height |
+ *
+ * ---
+ *
+ * @section zig_error Error
+ *
+ * **`Error`** — error set returned by `Context.init()` and `present()`.
+ *
+ * `NoMemory` `Io` `NotATty` `Unsupported` `Timeout`
+ *
+ * ---
+ *
+ * @section zig_box Box drawing
+ *
+ * **`Box`** — index constants for box-drawing codepoint tables.
+ *
+ * `tl` `tr` `bl` `br` `h` `v` `lt` `rt` `tt` `bt` `x`
+ *
+ * **`BoxVariant`** — `enum { light, heavy, double }`
+ *
+ * **`boxCp(variant: BoxVariant, idx: usize) u21`** — return the Unicode
+ * codepoint at `idx` from the chosen box table. Use with `Box.*` index
+ * constants.
+ *
+ * @code{.zig}
+ * const corner = zetui.boxCp(.heavy, zetui.Box.tl);
+ * @endcode
+ */

@@ -75,68 +75,13 @@ In build.zig add the module exposed by this repo, then:
 See examples/hello.zig and examples/demo.zig.
 
 
-API — C
--------
+API REFERENCE
+-------------
 
-Lifecycle:
-    zetui_ctx_t  *zetui_init(void)
-    void          zetui_shutdown(zetui_ctx_t *ctx)
+Generate locally with:
 
-Geometry:
-    int           zetui_width(const zetui_ctx_t *ctx)
-    int           zetui_height(const zetui_ctx_t *ctx)
-
-Buffer:
-    void          zetui_clear(zetui_ctx_t *ctx)
-    void          zetui_set_cell(zetui_ctx_t *ctx, int x, int y, zetui_cell_t)
-    zetui_cell_t  zetui_get_cell(const zetui_ctx_t *ctx, int x, int y)
-    zetui_error_t zetui_present(zetui_ctx_t *ctx)
-
-Events:
-    zetui_event_t zetui_poll_event(zetui_ctx_t *ctx)   /* non-blocking */
-    zetui_event_t zetui_wait_event(zetui_ctx_t *ctx, int timeout_ms)
-
-Drawing:
-    void zetui_draw_str  (ctx, x, y, str, style)
-    void zetui_draw_box  (ctx, x, y, w, h, style)       /* light box */
-    void zetui_fill_rect (ctx, x, y, w, h, cell)
-    void zetui_draw_hline(ctx, x, y, len, codepoint, style)
-    void zetui_draw_vline(ctx, x, y, len, codepoint, style)
-
-Cursor:
-    void zetui_cursor_hide(zetui_ctx_t *ctx)
-    void zetui_cursor_show(zetui_ctx_t *ctx)
-    void zetui_cursor_move(zetui_ctx_t *ctx, int x, int y)
-
-Helpers:
-    zetui_style_t zetui_style_default(void)
-    zetui_cell_t  zetui_cell_make(zetui_u32 ch, zetui_style_t style)
-
-Box drawing tables (11 codepoints each, indexed with ZETUI_BOX_*):
-    extern const zetui_u32 zetui_box_light[11]
-    extern const zetui_u32 zetui_box_heavy[11]
-    extern const zetui_u32 zetui_box_double[11]
-
-
-COLORS
-------
-
-ZETUI_COLOR_DEFAULT, ZETUI_COLOR_BLACK, ZETUI_COLOR_RED,
-ZETUI_COLOR_GREEN, ZETUI_COLOR_YELLOW, ZETUI_COLOR_BLUE,
-ZETUI_COLOR_MAGENTA, ZETUI_COLOR_CYAN, ZETUI_COLOR_WHITE,
-and bright variants (ZETUI_COLOR_BRIGHT_*).
-
-Set via zetui_style_t.fg / .bg.
-
-
-ATTRIBUTES
-----------
-
-ZETUI_ATTR_NONE, ZETUI_ATTR_BOLD, ZETUI_ATTR_DIM, ZETUI_ATTR_ITALIC,
-ZETUI_ATTR_UNDERLINE, ZETUI_ATTR_BLINK, ZETUI_ATTR_REVERSE,
-ZETUI_ATTR_HIDDEN, ZETUI_ATTR_STRIKE.
-
-Combine with bitwise OR. Set via zetui_style_t.attrs.
+    doxygen Doxyfile
+    # output: docs/html/index.html
 
 
 BUILD TARGETS
