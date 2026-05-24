@@ -53,7 +53,7 @@
 
           meta = {
             description = "ANSI/C89 TUI library with Zig bindings";
-            license     = pkgs.lib.licenses.mit;
+            license     = pkgs.lib.licenses.unlicense;
             platforms   = pkgs.lib.platforms.linux;
           };
         };

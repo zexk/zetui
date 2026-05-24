@@ -1,6 +1,5 @@
 /// hello.zig — minimal Zig example
 /// Build: zig build run-hello-zig
-
 const std = @import("std");
 const zetui = @import("zetui");
 
