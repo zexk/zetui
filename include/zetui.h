@@ -1075,7 +1075,14 @@ extern "C"
         ctx->cursor_x = 0;
         ctx->cursor_y = 0;
 
-        signal (SIGWINCH, zetui__sigwinch);
+        {
+            struct sigaction sa;
+            memset (&sa, 0, sizeof (sa));
+            sa.sa_handler = zetui__sigwinch;
+            sigemptyset (&sa.sa_mask);
+            sa.sa_flags = 0;
+            sigaction (SIGWINCH, &sa, NULL);
+        }
 
         write (ctx->fd_out, "\033[?1049h\033[?25l", 14);
 
@@ -1088,7 +1095,14 @@ extern "C"
         if (!ctx)
             return;
 
-        signal (SIGWINCH, SIG_DFL);
+        {
+            struct sigaction sa;
+            memset (&sa, 0, sizeof (sa));
+            sa.sa_handler = SIG_DFL;
+            sigemptyset (&sa.sa_mask);
+            sa.sa_flags = 0;
+            sigaction (SIGWINCH, &sa, NULL);
+        }
         write (ctx->fd_out, "\033[?25h\033[?1049l", 14);
         zetui__leave_raw (ctx->fd_in, &ctx->saved_termios);
 
