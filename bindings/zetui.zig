@@ -71,15 +71,19 @@ pub const Key = enum(c_int) {
     ctrl_g = c.ZETUI_KEY_CTRL_G,
     backspace = c.ZETUI_KEY_BACKSPACE,
     tab = c.ZETUI_KEY_TAB,
+    ctrl_j = c.ZETUI_KEY_CTRL_J,
     enter = c.ZETUI_KEY_ENTER,
     ctrl_k = c.ZETUI_KEY_CTRL_K,
     ctrl_l = c.ZETUI_KEY_CTRL_L,
     ctrl_n = c.ZETUI_KEY_CTRL_N,
+    ctrl_o = c.ZETUI_KEY_CTRL_O,
     ctrl_p = c.ZETUI_KEY_CTRL_P,
     ctrl_q = c.ZETUI_KEY_CTRL_Q,
     ctrl_r = c.ZETUI_KEY_CTRL_R,
     ctrl_s = c.ZETUI_KEY_CTRL_S,
+    ctrl_t = c.ZETUI_KEY_CTRL_T,
     ctrl_u = c.ZETUI_KEY_CTRL_U,
+    ctrl_v = c.ZETUI_KEY_CTRL_V,
     ctrl_w = c.ZETUI_KEY_CTRL_W,
     ctrl_x = c.ZETUI_KEY_CTRL_X,
     ctrl_y = c.ZETUI_KEY_CTRL_Y,
@@ -111,7 +115,7 @@ pub const Key = enum(c_int) {
     _,
 };
 
-/// Encode R, G, B into a 24-bit "color" value for use in Style.rgb_fg / rgb_bg.
+/// Convenience constructor for a true-color value (Style.rgb_fg / rgb_bg).
 pub fn rgb(r: u8, g: u8, b: u8) Rgb {
     return .{ .r = r, .g = g, .b = b };
 }
@@ -281,7 +285,11 @@ pub const Context = struct {
 
     /// Open the TUI on the controlling terminal.
     pub fn init() Error!Context {
-        const ptr = c.zetui_init() orelse return error.NotATty;
+        var code: c.zetui_error_t = c.ZETUI_OK;
+        const ptr = c.zetui_init_ex(&code) orelse {
+            try mapError(code);
+            return error.Io; // NULL with ZETUI_OK cannot happen
+        };
         return .{ .raw = ptr };
     }
 

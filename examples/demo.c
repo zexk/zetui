@@ -451,6 +451,8 @@ key_name (zetui_key_t k)
             return "Backspace";
         case ZETUI_KEY_TAB:
             return "Tab";
+        case ZETUI_KEY_CTRL_J:
+            return "Ctrl-J";
         case ZETUI_KEY_ENTER:
             return "Enter";
         case ZETUI_KEY_CTRL_K:
@@ -459,6 +461,8 @@ key_name (zetui_key_t k)
             return "Ctrl-L";
         case ZETUI_KEY_CTRL_N:
             return "Ctrl-N";
+        case ZETUI_KEY_CTRL_O:
+            return "Ctrl-O";
         case ZETUI_KEY_CTRL_P:
             return "Ctrl-P";
         case ZETUI_KEY_CTRL_Q:
@@ -467,8 +471,12 @@ key_name (zetui_key_t k)
             return "Ctrl-R";
         case ZETUI_KEY_CTRL_S:
             return "Ctrl-S";
+        case ZETUI_KEY_CTRL_T:
+            return "Ctrl-T";
         case ZETUI_KEY_CTRL_U:
             return "Ctrl-U";
+        case ZETUI_KEY_CTRL_V:
+            return "Ctrl-V";
         case ZETUI_KEY_CTRL_W:
             return "Ctrl-W";
         case ZETUI_KEY_CTRL_X:
@@ -833,17 +841,22 @@ panel_patterns (zetui_ctx_t *ctx, int x, int y, int w, int h)
     /* -- hlines from all three tables ------------------------------ */
     zetui_draw_str (ctx, x, row, "draw_hline (light / heavy / double):", hdr);
     row++;
-    for (ci = 0; ci < 3; ci++)
-        {
-            const zetui_u32 *t;
-            zetui_style_t hs;
-            t = (ci == 0)   ? zetui_box_light
-                : (ci == 1) ? zetui_box_heavy
-                            : zetui_box_double;
-            hs = mk_style (ZETUI_COLOR_BRIGHT_CYAN + ci, ZETUI_COLOR_DEFAULT,
-                           ZETUI_ATTR_NONE);
-            zetui_draw_hline (ctx, x, row + ci, w - 1, t[ZETUI_BOX_H], hs);
-        }
+    {
+        static const zetui_i32 hl_colors[3]
+            = { ZETUI_COLOR_BRIGHT_CYAN, ZETUI_COLOR_BRIGHT_YELLOW,
+                ZETUI_COLOR_BRIGHT_GREEN };
+        for (ci = 0; ci < 3; ci++)
+            {
+                const zetui_u32 *t;
+                zetui_style_t hs;
+                t = (ci == 0)   ? zetui_box_light
+                    : (ci == 1) ? zetui_box_heavy
+                                : zetui_box_double;
+                hs = mk_style (hl_colors[ci], ZETUI_COLOR_DEFAULT,
+                               ZETUI_ATTR_NONE);
+                zetui_draw_hline (ctx, x, row + ci, w - 1, t[ZETUI_BOX_H], hs);
+            }
+    }
     row += 4;
 
     /* -- zetui_get_cell -> invert fg/bg then zetui_set_cell -------- */

@@ -101,7 +101,7 @@ extern "C"
                  | (zetui_u32)(b)))
 
 /** @brief True if @p c was created with @c ZETUI_COLOR_RGB (vs a palette color). */
-#define ZETUI_COLOR_IS_RGB(c) ((zetui_u32)(c) >> 24)
+#define ZETUI_COLOR_IS_RGB(c) (((zetui_u32)(c) >> 24) == 1u)
 
     /* ================================================================== */
     /*  Cell attributes                                                    */
@@ -175,15 +175,19 @@ extern "C"
         ZETUI_KEY_CTRL_G = 7,
         ZETUI_KEY_BACKSPACE = 8,
         ZETUI_KEY_TAB = 9,
+        ZETUI_KEY_CTRL_J = 10,
         ZETUI_KEY_ENTER = 13,
         ZETUI_KEY_CTRL_K = 11,
         ZETUI_KEY_CTRL_L = 12,
         ZETUI_KEY_CTRL_N = 14,
+        ZETUI_KEY_CTRL_O = 15,
         ZETUI_KEY_CTRL_P = 16,
         ZETUI_KEY_CTRL_Q = 17,
         ZETUI_KEY_CTRL_R = 18,
         ZETUI_KEY_CTRL_S = 19,
+        ZETUI_KEY_CTRL_T = 20,
         ZETUI_KEY_CTRL_U = 21,
+        ZETUI_KEY_CTRL_V = 22,
         ZETUI_KEY_CTRL_W = 23,
         ZETUI_KEY_CTRL_X = 24,
         ZETUI_KEY_CTRL_Y = 25,
@@ -325,6 +329,17 @@ extern "C"
      * @return Allocated context, or NULL if stdout is not a TTY or on error.
      */
     zetui_ctx_t *zetui_init (void);
+
+    /**
+     * @brief Initialise zetui, reporting the failure reason.
+     *
+     * Identical to zetui_init() but stores the cause in @p err when NULL
+     * is returned: @c ZETUI_ERR_NOMEM, @c ZETUI_ERR_NOT_A_TTY or
+     * @c ZETUI_ERR_IO.
+     * @param err Receives the error code on failure (may be NULL).
+     * @return Allocated context, or NULL on error.
+     */
+    zetui_ctx_t *zetui_init_ex (zetui_error_t *err);
 
     /**
      * @brief Restore terminal state and free the context.
@@ -514,6 +529,7 @@ extern "C"
 #include <sys/select.h>
 #include <sys/types.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
     /* ------------------------------------------------------------------ */
@@ -580,16 +596,27 @@ extern "C"
     {
         char tmp[12];
         char buf[13];
+        unsigned int u;
         int i, len;
 
         if (n == 0)
             return zetui__obuf_append (ob, "0", 1u);
 
-        i = 0;
-        while (n > 0)
+        if (n < 0)
             {
-                tmp[i++] = (char)('0' + (n % 10));
-                n /= 10;
+                zetui__obuf_append (ob, "-", 1u);
+                u = (unsigned int)-(n + 1) + 1u; /* INT_MIN-safe negate */
+            }
+        else
+            {
+                u = (unsigned int)n;
+            }
+
+        i = 0;
+        while (u > 0u)
+            {
+                tmp[i++] = (char)('0' + (u % 10u));
+                u /= 10u;
             }
         len = 0;
         while (i > 0)
@@ -617,6 +644,27 @@ extern "C"
             }
         ob->len = 0u;
         return 0;
+    }
+
+    /* write() the whole buffer, retrying on EINTR and partial writes. */
+    static void
+    zetui__write_all (int fd, const char *buf, size_t len)
+    {
+        size_t off;
+        ssize_t n;
+
+        off = 0u;
+        while (off < len)
+            {
+                n = write (fd, buf + off, len - off);
+                if (n < 0)
+                    {
+                        if (errno == EINTR)
+                            continue;
+                        return;
+                    }
+                off += (size_t)n;
+            }
     }
 
     /* ------------------------------------------------------------------ */
@@ -667,12 +715,18 @@ extern "C"
         int cursor_x;
         int cursor_y;
 
+        /* Whether the terminal itself currently shows the cursor */
+        int term_cursor_on;
+
         /* Set by SIGWINCH handler */
         int resize_pending;
 
         /* Signal masks for race-free SIGWINCH handling via pselect() */
         sigset_t orig_mask;   /* process mask to restore at shutdown */
         sigset_t select_mask; /* orig_mask with SIGWINCH unblocked   */
+
+        /* SIGWINCH disposition that was in place before zetui_init() */
+        struct sigaction old_winch;
     };
 
     /* ------------------------------------------------------------------ */
@@ -1003,7 +1057,6 @@ extern "C"
         ctx->ren_y = -1;
 
         ctx->out.len = 0u;
-        zetui__obuf_append_str (&ctx->out, "\033[?25l");
 
         for (y = 0; y < ctx->height; y++)
             {
@@ -1014,6 +1067,16 @@ extern "C"
 
                         if (zetui__cells_eq (*b, *f))
                             continue;
+
+                        /* Hide the cursor while painting, but only if it
+                           is actually shown: unconditional hide/show per
+                           frame makes a visible cursor flicker. */
+                        if (ctx->term_cursor_on)
+                            {
+                                zetui__obuf_append_str (&ctx->out,
+                                                        "\033[?25l");
+                                ctx->term_cursor_on = 0;
+                            }
 
                         if (ctx->ren_x != x || ctx->ren_y != y)
                             {
@@ -1038,7 +1101,16 @@ extern "C"
         if (ctx->cursor_visible)
             {
                 zetui__ansi_move (&ctx->out, ctx->cursor_x, ctx->cursor_y);
-                zetui__obuf_append_str (&ctx->out, "\033[?25h");
+                if (!ctx->term_cursor_on)
+                    {
+                        zetui__obuf_append_str (&ctx->out, "\033[?25h");
+                        ctx->term_cursor_on = 1;
+                    }
+            }
+        else if (ctx->term_cursor_on)
+            {
+                zetui__obuf_append_str (&ctx->out, "\033[?25l");
+                ctx->term_cursor_on = 0;
             }
 
         return zetui__obuf_flush (&ctx->out, ctx->fd_out) == 0 ? ZETUI_OK
@@ -1086,32 +1158,44 @@ extern "C"
     }
 
     zetui_ctx_t *
-    zetui_init (void)
+    zetui_init_ex (zetui_error_t *err)
     {
         zetui_ctx_t *ctx;
+        zetui_error_t dummy;
         int w, h;
+
+        if (!err)
+            err = &dummy;
+        *err = ZETUI_OK;
 
         ctx = (zetui_ctx_t *)calloc (1u, sizeof (zetui_ctx_t));
         if (!ctx)
-            return NULL;
+            {
+                *err = ZETUI_ERR_NOMEM;
+                return NULL;
+            }
 
         ctx->fd_in = STDIN_FILENO;
         ctx->fd_out = STDOUT_FILENO;
 
         if (!isatty (ctx->fd_out))
             {
+                *err = ZETUI_ERR_NOT_A_TTY;
                 free (ctx);
                 return NULL;
             }
 
         if (zetui__enter_raw (ctx->fd_in, &ctx->saved_termios) == -1)
             {
+                *err = (errno == ENOTTY) ? ZETUI_ERR_NOT_A_TTY
+                                         : ZETUI_ERR_IO;
                 free (ctx);
                 return NULL;
             }
 
         if (zetui__query_size (ctx->fd_out, &w, &h) == -1)
             {
+                *err = ZETUI_ERR_IO;
                 zetui__leave_raw (ctx->fd_in, &ctx->saved_termios);
                 free (ctx);
                 return NULL;
@@ -1119,6 +1203,7 @@ extern "C"
 
         if (zetui__obuf_init (&ctx->out, 65536u) == -1)
             {
+                *err = ZETUI_ERR_NOMEM;
                 zetui__leave_raw (ctx->fd_in, &ctx->saved_termios);
                 free (ctx);
                 return NULL;
@@ -1126,6 +1211,7 @@ extern "C"
 
         if (zetui__screen_resize (ctx, w, h) == -1)
             {
+                *err = ZETUI_ERR_NOMEM;
                 zetui__obuf_free (&ctx->out);
                 zetui__leave_raw (ctx->fd_in, &ctx->saved_termios);
                 free (ctx);
@@ -1135,6 +1221,7 @@ extern "C"
         ctx->cursor_visible = 1;
         ctx->cursor_x = 0;
         ctx->cursor_y = 0;
+        ctx->term_cursor_on = 0; /* hidden by the init escape below */
 
         {
             struct sigaction sa;
@@ -1144,7 +1231,7 @@ extern "C"
             sa.sa_handler = zetui__sigwinch;
             sigemptyset (&sa.sa_mask);
             sa.sa_flags = 0;
-            sigaction (SIGWINCH, &sa, NULL);
+            sigaction (SIGWINCH, &sa, &ctx->old_winch);
 
             /* Keep SIGWINCH blocked except inside pselect(): the resize
                flag can then only be raised while actually waiting, which
@@ -1157,9 +1244,15 @@ extern "C"
             sigdelset (&ctx->select_mask, SIGWINCH);
         }
 
-        write (ctx->fd_out, "\033[?1049h\033[?25l", 14);
+        zetui__write_all (ctx->fd_out, "\033[?1049h\033[?25l", 14u);
 
         return ctx;
+    }
+
+    zetui_ctx_t *
+    zetui_init (void)
+    {
+        return zetui_init_ex (NULL);
     }
 
     void
@@ -1168,16 +1261,9 @@ extern "C"
         if (!ctx)
             return;
 
-        {
-            struct sigaction sa;
-            memset (&sa, 0, sizeof (sa));
-            sa.sa_handler = SIG_DFL;
-            sigemptyset (&sa.sa_mask);
-            sa.sa_flags = 0;
-            sigaction (SIGWINCH, &sa, NULL);
-            sigprocmask (SIG_SETMASK, &ctx->orig_mask, NULL);
-        }
-        write (ctx->fd_out, "\033[?25h\033[?1049l", 14);
+        sigaction (SIGWINCH, &ctx->old_winch, NULL);
+        sigprocmask (SIG_SETMASK, &ctx->orig_mask, NULL);
+        zetui__write_all (ctx->fd_out, "\033[?25h\033[?1049l", 14u);
         zetui__leave_raw (ctx->fd_in, &ctx->saved_termios);
 
         free (ctx->front);
@@ -1269,29 +1355,57 @@ extern "C"
         fd_set rfds;
         struct timespec ts;
         struct timespec *tsp;
+        struct timespec start, now;
+        long elapsed_ms;
+        int remaining_ms;
         ssize_t n;
         int ret;
 
         if (ib->len >= ZETUI__IBUF)
             return 0;
 
-        FD_ZERO (&rfds);
-        FD_SET (fd, &rfds);
+        remaining_ms = timeout_ms;
+        if (timeout_ms > 0)
+            clock_gettime (CLOCK_MONOTONIC, &start);
 
-        if (timeout_ms < 0)
+        /* Restart after signals that are not a resize, so an unrelated
+           SIGALRM etc. does not surface as a spurious empty event. */
+        for (;;)
             {
-                tsp = NULL;
-            }
-        else
-            {
-                ts.tv_sec = timeout_ms / 1000;
-                ts.tv_nsec = (long)(timeout_ms % 1000) * 1000000L;
-                tsp = &ts;
+                FD_ZERO (&rfds);
+                FD_SET (fd, &rfds);
+
+                if (remaining_ms < 0)
+                    {
+                        tsp = NULL;
+                    }
+                else
+                    {
+                        ts.tv_sec = remaining_ms / 1000;
+                        ts.tv_nsec = (long)(remaining_ms % 1000) * 1000000L;
+                        tsp = &ts;
+                    }
+
+                ret = pselect (fd + 1, &rfds, NULL, NULL, tsp, mask);
+                if (ret >= 0)
+                    break;
+                if (errno != EINTR || zetui__resize_flag)
+                    return ret;
+
+                if (timeout_ms > 0)
+                    {
+                        clock_gettime (CLOCK_MONOTONIC, &now);
+                        elapsed_ms
+                            = (long)(now.tv_sec - start.tv_sec) * 1000L
+                              + (now.tv_nsec - start.tv_nsec) / 1000000L;
+                        if (elapsed_ms >= (long)timeout_ms)
+                            return 0;
+                        remaining_ms = timeout_ms - (int)elapsed_ms;
+                    }
             }
 
-        ret = pselect (fd + 1, &rfds, NULL, NULL, tsp, mask);
-        if (ret <= 0)
-            return ret;
+        if (ret == 0)
+            return 0;
 
         n = read (fd, ib->data + ib->len, (size_t)(ZETUI__IBUF - ib->len));
         if (n <= 0)
@@ -1474,7 +1588,7 @@ extern "C"
                    still shows the reflowed pre-resize content; wipe it
                    so the next present() diff starts from a truly blank
                    screen instead of leaving stale cells behind. */
-                write (ctx->fd_out, "\033[2J", 4);
+                zetui__write_all (ctx->fd_out, "\033[2J", 4u);
             }
 
         ev.type = ZETUI_EVENT_RESIZE;
