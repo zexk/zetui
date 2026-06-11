@@ -669,6 +669,10 @@ extern "C"
 
         /* Set by SIGWINCH handler */
         int resize_pending;
+
+        /* Signal masks for race-free SIGWINCH handling via pselect() */
+        sigset_t orig_mask;   /* process mask to restore at shutdown */
+        sigset_t select_mask; /* orig_mask with SIGWINCH unblocked   */
     };
 
     /* ------------------------------------------------------------------ */
@@ -1134,11 +1138,23 @@ extern "C"
 
         {
             struct sigaction sa;
+            sigset_t block;
+
             memset (&sa, 0, sizeof (sa));
             sa.sa_handler = zetui__sigwinch;
             sigemptyset (&sa.sa_mask);
             sa.sa_flags = 0;
             sigaction (SIGWINCH, &sa, NULL);
+
+            /* Keep SIGWINCH blocked except inside pselect(): the resize
+               flag can then only be raised while actually waiting, which
+               closes the race between checking the flag and starting to
+               wait. Signals arriving in between stay pending. */
+            sigemptyset (&block);
+            sigaddset (&block, SIGWINCH);
+            sigprocmask (SIG_BLOCK, &block, &ctx->orig_mask);
+            ctx->select_mask = ctx->orig_mask;
+            sigdelset (&ctx->select_mask, SIGWINCH);
         }
 
         write (ctx->fd_out, "\033[?1049h\033[?25l", 14);
@@ -1159,6 +1175,7 @@ extern "C"
             sigemptyset (&sa.sa_mask);
             sa.sa_flags = 0;
             sigaction (SIGWINCH, &sa, NULL);
+            sigprocmask (SIG_SETMASK, &ctx->orig_mask, NULL);
         }
         write (ctx->fd_out, "\033[?25h\033[?1049l", 14);
         zetui__leave_raw (ctx->fd_in, &ctx->saved_termios);
@@ -1242,35 +1259,110 @@ extern "C"
             { "\033OD", ZETUI_KEY_ARROW_LEFT },
             { NULL, ZETUI_KEY_NONE } };
 
+    /* Wait up to timeout_ms for input and append it to the buffer.
+       Uses pselect() with SIGWINCH unblocked so a resize can only be
+       signalled while waiting (never between flag check and wait). */
     static int
-    zetui__ibuf_fill (zetui__ibuf_t *ib, int fd, int timeout_ms)
+    zetui__ibuf_read (zetui__ibuf_t *ib, int fd, int timeout_ms,
+                      const sigset_t *mask)
     {
         fd_set rfds;
-        struct timeval tv;
-        struct timeval *tvp;
+        struct timespec ts;
+        struct timespec *tsp;
+        ssize_t n;
         int ret;
+
+        if (ib->len >= ZETUI__IBUF)
+            return 0;
 
         FD_ZERO (&rfds);
         FD_SET (fd, &rfds);
 
         if (timeout_ms < 0)
             {
-                tvp = NULL;
+                tsp = NULL;
             }
         else
             {
-                tv.tv_sec = timeout_ms / 1000;
-                tv.tv_usec = (timeout_ms % 1000) * 1000;
-                tvp = &tv;
+                ts.tv_sec = timeout_ms / 1000;
+                ts.tv_nsec = (long)(timeout_ms % 1000) * 1000000L;
+                tsp = &ts;
             }
 
-        ret = select (fd + 1, &rfds, NULL, NULL, tvp);
+        ret = pselect (fd + 1, &rfds, NULL, NULL, tsp, mask);
         if (ret <= 0)
             return ret;
 
-        ib->len = (int)read (fd, ib->data, ZETUI__IBUF);
+        n = read (fd, ib->data + ib->len, (size_t)(ZETUI__IBUF - ib->len));
+        if (n <= 0)
+            return -1;
+        ib->len += (int)n;
+        return (int)n;
+    }
+
+    static int
+    zetui__ibuf_fill (zetui__ibuf_t *ib, int fd, int timeout_ms,
+                      const sigset_t *mask)
+    {
+        ib->len = 0;
         ib->pos = 0;
-        return ib->len > 0 ? ib->len : -1;
+        return zetui__ibuf_read (ib, fd, timeout_ms, mask);
+    }
+
+    /* Milliseconds to wait for the rest of a partially received escape
+       sequence before treating a lone ESC as the Escape key. */
+#define ZETUI__ESC_WAIT_MS 30
+
+    /* Return 1 if buf[0..len), starting with ESC, could be the prefix
+       of an escape sequence whose remaining bytes are still in flight. */
+    static int
+    zetui__esc_incomplete (const unsigned char *buf, int len)
+    {
+        int i;
+
+        if (len <= 1)
+            return 1;
+        if (buf[1] == (unsigned char)'[')
+            {
+                for (i = 2; i < len; i++)
+                    if (buf[i] >= 0x40u && buf[i] <= 0x7Eu)
+                        return 0; /* CSI final byte seen */
+                return 1;
+            }
+        if (buf[1] == (unsigned char)'O')
+            return len < 3; /* SS3 needs one more byte */
+        return 0;
+    }
+
+    /* If the pending bytes begin an incomplete escape sequence, wait
+       briefly for the remainder (sequences are routinely split across
+       read() boundaries, e.g. over SSH). */
+    static void
+    zetui__ibuf_complete_esc (zetui_ctx_t *ctx)
+    {
+        zetui__ibuf_t *ib;
+
+        ib = &ctx->in;
+        if (ib->pos >= ib->len || ib->data[ib->pos] != 0x1Bu)
+            return;
+
+        /* Compact consumed bytes away so there is room to append. */
+        if (ib->pos > 0)
+            {
+                memmove (ib->data, ib->data + ib->pos,
+                         (size_t)(ib->len - ib->pos));
+                ib->len -= ib->pos;
+                ib->pos = 0;
+            }
+
+        while (ib->len < ZETUI__IBUF
+               && zetui__esc_incomplete (ib->data, ib->len))
+            {
+                if (zetui__ibuf_read (ib, ctx->fd_in, ZETUI__ESC_WAIT_MS,
+                                      &ctx->select_mask)
+                    <= 0)
+                    break;
+            }
     }
 
     static zetui_event_t
@@ -1290,13 +1382,13 @@ extern "C"
 
         c = ib->data[ib->pos];
 
-        if (c == 0x1Bu && ib->len - ib->pos > 1)
+        if (c == 0x1Bu)
             {
-                int rem;
-                const char *buf;
+                int rem, i;
+                const unsigned char *buf;
 
                 rem = ib->len - ib->pos;
-                buf = (const char *)(ib->data + ib->pos);
+                buf = ib->data + ib->pos;
 
                 for (e = zetui__esc_table; e->seq != NULL; e++)
                     {
@@ -1318,6 +1410,25 @@ extern "C"
                 ev.data.key.key = ZETUI_KEY_ESC;
                 ev.data.key.ch = 0x1Bu;
                 ev.data.key.mods = ZETUI_MOD_NONE;
+
+                /* Unrecognised but well-formed sequences are consumed
+                   whole so their bytes are not replayed as bogus
+                   printable-key events. */
+                if (rem > 1 && buf[1] == (unsigned char)'[')
+                    {
+                        for (i = 2; i < rem; i++)
+                            if (buf[i] >= 0x40u && buf[i] <= 0x7Eu)
+                                {
+                                    ib->pos += i + 1;
+                                    return ev;
+                                }
+                    }
+                else if (rem > 2 && buf[1] == (unsigned char)'O')
+                    {
+                        ib->pos += 3;
+                        return ev;
+                    }
+
                 ib->pos++;
                 return ev;
             }
@@ -1338,7 +1449,13 @@ extern "C"
         ev.type = ZETUI_EVENT_KEY;
         ev.data.key.key = (zetui_key_t)c;
         ev.data.key.ch = c;
-        ev.data.key.mods = (c < 32u) ? ZETUI_MOD_CTRL : ZETUI_MOD_NONE;
+        /* Control bytes with a key of their own (Backspace, Tab, Enter)
+           are what those keys send; reporting them as Ctrl-modified
+           would be wrong. */
+        if (c < 32u && c != 8u && c != 9u && c != 13u)
+            ev.data.key.mods = ZETUI_MOD_CTRL;
+        else
+            ev.data.key.mods = ZETUI_MOD_NONE;
         ib->pos++;
         return ev;
     }
@@ -1350,8 +1467,15 @@ extern "C"
         int w, h;
 
         zetui__resize_flag = 0;
-        if (zetui__query_size (ctx->fd_out, &w, &h) == 0)
-            zetui__screen_resize (ctx, w, h);
+        if (zetui__query_size (ctx->fd_out, &w, &h) == 0
+            && zetui__screen_resize (ctx, w, h) == 0)
+            {
+                /* Both cell buffers are blank again, but the terminal
+                   still shows the reflowed pre-resize content; wipe it
+                   so the next present() diff starts from a truly blank
+                   screen instead of leaving stale cells behind. */
+                write (ctx->fd_out, "\033[2J", 4);
+            }
 
         ev.type = ZETUI_EVENT_RESIZE;
         ev.data.resize.width = ctx->width;
@@ -1367,33 +1491,9 @@ extern "C"
         if (zetui__resize_flag)
             return zetui__resize_ev (ctx);
 
-        if (ctx->in.pos < ctx->in.len)
-            return zetui__parse (&ctx->in);
-
-        if (zetui__ibuf_fill (&ctx->in, ctx->fd_in, 0) <= 0)
-            {
-                memset (&none, 0, sizeof (none));
-                none.type = ZETUI_EVENT_NONE;
-                return none;
-            }
-        return zetui__parse (&ctx->in);
-    }
-
-    zetui_event_t
-    zetui_wait_event (zetui_ctx_t *ctx, int timeout_ms)
-    {
-        zetui_event_t none;
-        int ret;
-
-        if (zetui__resize_flag)
-            return zetui__resize_ev (ctx);
-
-        if (ctx->in.pos < ctx->in.len)
-            return zetui__parse (&ctx->in);
-
-        ret = zetui__ibuf_fill (&ctx->in, ctx->fd_in, timeout_ms);
-
-        if (ret <= 0)
+        if (ctx->in.pos >= ctx->in.len
+            && zetui__ibuf_fill (&ctx->in, ctx->fd_in, 0, &ctx->select_mask)
+                   <= 0)
             {
                 if (zetui__resize_flag)
                     return zetui__resize_ev (ctx);
@@ -1401,6 +1501,32 @@ extern "C"
                 none.type = ZETUI_EVENT_NONE;
                 return none;
             }
+
+        zetui__ibuf_complete_esc (ctx);
+        return zetui__parse (&ctx->in);
+    }
+
+    zetui_event_t
+    zetui_wait_event (zetui_ctx_t *ctx, int timeout_ms)
+    {
+        zetui_event_t none;
+
+        if (zetui__resize_flag)
+            return zetui__resize_ev (ctx);
+
+        if (ctx->in.pos >= ctx->in.len
+            && zetui__ibuf_fill (&ctx->in, ctx->fd_in, timeout_ms,
+                                 &ctx->select_mask)
+                   <= 0)
+            {
+                if (zetui__resize_flag)
+                    return zetui__resize_ev (ctx);
+                memset (&none, 0, sizeof (none));
+                none.type = ZETUI_EVENT_NONE;
+                return none;
+            }
+
+        zetui__ibuf_complete_esc (ctx);
         return zetui__parse (&ctx->in);
     }
 
