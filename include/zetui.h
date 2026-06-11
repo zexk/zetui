@@ -1436,6 +1436,8 @@ extern "C"
 
         if (len <= 1)
             return 1;
+        if (buf[1] == 0x1Bu) /* Alt prefix: check the inner sequence */
+            return zetui__esc_incomplete (buf + 1, len - 1);
         if (buf[1] == (unsigned char)'[')
             {
                 for (i = 2; i < len; i++)
@@ -1518,6 +1520,24 @@ extern "C"
                                 ib->pos += slen;
                                 return ev;
                             }
+                    }
+
+                /* Alt-modified key: terminals prefix the key's bytes
+                   with ESC. Consume the prefix, parse the underlying
+                   key (sequences included: urxvt sends ESC ESC [ A for
+                   Alt+Up) and tag it. ESC [ / ESC O followed by nothing
+                   even after the grace wait are Alt+[ / Alt+O rather
+                   than torn sequences. */
+                if (rem > 1
+                    && ((buf[1] != (unsigned char)'['
+                         && buf[1] != (unsigned char)'O')
+                        || rem == 2))
+                    {
+                        ib->pos++;
+                        ev = zetui__parse (ib);
+                        if (ev.type == ZETUI_EVENT_KEY)
+                            ev.data.key.mods |= ZETUI_MOD_ALT;
+                        return ev;
                     }
 
                 ev.type = ZETUI_EVENT_KEY;
