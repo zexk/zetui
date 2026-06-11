@@ -442,6 +442,12 @@ fn panelUtf8(tui: *zetui.Context, x: i32, y: i32, w: i32, h: i32) void {
     tui.drawStr(x, row, "\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x90 " ++
         "\xe2\x96\x88\xe2\x96\x84\xe2\x96\x80 " ++
         "\xe2\x99\xa5 \xe2\x98\x85 \xe2\x9c\x93", .{ .fg = .bright_yellow });
+
+    // Wide characters: zetui.charWidth() == 2, two cells each
+    row += 2;
+    tui.drawStr(x, row, "Wide characters (two cells each):", hdr);
+    row += 1;
+    tui.drawStr(x, row, "日本語 한국어 中文 🚀🎮🐍", .{ .fg = .bright_green });
 }
 
 // ================================================================== //

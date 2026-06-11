@@ -120,6 +120,15 @@ pub fn rgb(r: u8, g: u8, b: u8) Rgb {
     return .{ .r = r, .g = g, .b = b };
 }
 
+/// Display width of a codepoint in terminal cells: 2 for wide (CJK,
+/// most emoji), 0 for zero-width (combining marks), 1 otherwise.
+pub fn charWidth(cp: u21) i32 {
+    return c.zetui_char_width(cp);
+}
+
+/// Marker codepoint occupying the cell right of a wide character.
+pub const wide_pad: u32 = c.ZETUI_WIDE_PAD;
+
 // ------------------------------------------------------------------ //
 // Box-drawing tables                                                  //
 // ------------------------------------------------------------------ //

@@ -127,11 +127,22 @@ extern "C"
     /* ================================================================== */
 
     /**
+     * @brief Marker codepoint occupying the cell right of a wide character.
+     *
+     * Wide (two-column) characters such as CJK and most emoji cover two
+     * cells: the glyph lives in the left cell and the right cell holds
+     * this marker. zetui_set_cell() maintains the pairing automatically;
+     * cells read back with zetui_get_cell() may contain it.
+     */
+#define ZETUI_WIDE_PAD 0xFFFFFFFFu
+
+    /**
      * @brief A single terminal cell (codepoint + style).
      */
     typedef struct zetui_cell
     {
-        zetui_u32 ch;    /**< Unicode codepoint; 0 is treated as a space. */
+        zetui_u32 ch;    /**< Unicode codepoint; 0 is treated as a space,
+                              @c ZETUI_WIDE_PAD marks a wide-char tail. */
         zetui_i32 fg;    /**< Foreground color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
         zetui_i32 bg;    /**< Background color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
         zetui_u32 attrs; /**< Attribute flags (@c ZETUI_ATTR_* OR-combined). */
@@ -374,7 +385,11 @@ extern "C"
     /**
      * @brief Write a single cell to the back buffer.
      *
-     * Out-of-bounds coordinates are silently ignored.
+     * Out-of-bounds coordinates are silently ignored. Wide codepoints
+     * (zetui_char_width() == 2) also claim the cell to their right with
+     * @c ZETUI_WIDE_PAD; overwriting either half of an existing wide
+     * character truncates it to a space. A wide codepoint written to the
+     * last column, where its second half cannot fit, becomes a space.
      * @param ctx  Initialised context.
      * @param x    Column (0-based).
      * @param y    Row (0-based).
@@ -436,7 +451,20 @@ extern "C"
     zetui_cell_t zetui_cell_make (zetui_u32 ch, zetui_style_t style);
 
     /**
+     * @brief Display width of a Unicode codepoint in terminal cells.
+     * @param cp Unicode codepoint.
+     * @return 2 for wide codepoints (CJK, Hangul, fullwidth forms, most
+     *         emoji), 0 for zero-width codepoints (combining marks,
+     *         joiners, variation selectors), 1 otherwise.
+     */
+    int zetui_char_width (zetui_u32 cp);
+
+    /**
      * @brief Draw a NUL-terminated UTF-8 string to the back buffer.
+     *
+     * The cursor advances by zetui_char_width() per codepoint, so wide
+     * characters occupy two columns. Zero-width codepoints are skipped
+     * (cells hold exactly one codepoint each).
      * @param ctx   Initialised context.
      * @param x     Starting column.
      * @param y     Row.
@@ -836,6 +864,131 @@ extern "C"
     }
 
     /* ------------------------------------------------------------------ */
+    /*  Codepoint display width                                            */
+    /* ------------------------------------------------------------------ */
+
+    typedef struct
+    {
+        zetui_u32 first;
+        zetui_u32 last;
+    } zetui__cp_range_t;
+
+    /* Zero-width codepoints: the principal combining-mark ranges plus
+       joiners, bidi controls and variation selectors. Sorted. */
+    static const zetui__cp_range_t zetui__zero_width[] = {
+        { 0x0300u, 0x036Fu },   /* combining diacritical marks      */
+        { 0x0483u, 0x0489u },   /* cyrillic combining               */
+        { 0x0591u, 0x05BDu },   /* hebrew points                    */
+        { 0x05BFu, 0x05BFu },   { 0x05C1u, 0x05C2u },
+        { 0x05C4u, 0x05C5u },   { 0x05C7u, 0x05C7u },
+        { 0x0610u, 0x061Au },   /* arabic marks                     */
+        { 0x064Bu, 0x065Fu },   { 0x0670u, 0x0670u },
+        { 0x06D6u, 0x06DCu },   { 0x06DFu, 0x06E4u },
+        { 0x06E7u, 0x06E8u },   { 0x06EAu, 0x06EDu },
+        { 0x0711u, 0x0711u },   /* syriac                           */
+        { 0x0730u, 0x074Au },   { 0x07A6u, 0x07B0u },
+        { 0x0E31u, 0x0E31u },   /* thai                             */
+        { 0x0E34u, 0x0E3Au },   { 0x0E47u, 0x0E4Eu },
+        { 0x0EB1u, 0x0EB1u },   /* lao                              */
+        { 0x0EB4u, 0x0EBCu },   { 0x0EC8u, 0x0ECDu },
+        { 0x135Du, 0x135Fu },   /* ethiopic combining               */
+        { 0x1AB0u, 0x1AFFu },   /* combining marks extended         */
+        { 0x1DC0u, 0x1DFFu },   /* combining marks supplement       */
+        { 0x200Bu, 0x200Fu },   /* ZWSP, ZWNJ, ZWJ, LRM, RLM        */
+        { 0x202Au, 0x202Eu },   /* bidi embedding controls          */
+        { 0x2060u, 0x2064u },   /* word joiner, invisible operators */
+        { 0x20D0u, 0x20FFu },   /* combining marks for symbols      */
+        { 0xFE00u, 0xFE0Fu },   /* variation selectors              */
+        { 0xFE20u, 0xFE2Fu },   /* combining half marks             */
+        { 0xFEFFu, 0xFEFFu },   /* zero width no-break space        */
+        { 0xE0100u, 0xE01EFu }  /* variation selectors supplement   */
+    };
+
+    /* Wide (two-column) codepoints: East Asian Wide/Fullwidth ranges
+       plus the emoji blocks terminals render double-width. Sorted. */
+    static const zetui__cp_range_t zetui__double_width[] = {
+        { 0x1100u, 0x115Fu },   /* hangul jamo                      */
+        { 0x231Au, 0x231Bu },   /* watch, hourglass                 */
+        { 0x2329u, 0x232Au },   /* angle brackets                   */
+        { 0x23E9u, 0x23ECu },   { 0x23F0u, 0x23F0u },
+        { 0x23F3u, 0x23F3u },   { 0x25FDu, 0x25FEu },
+        { 0x2614u, 0x2615u },   { 0x2648u, 0x2653u },
+        { 0x267Fu, 0x267Fu },   { 0x2693u, 0x2693u },
+        { 0x26A1u, 0x26A1u },   { 0x26AAu, 0x26ABu },
+        { 0x26BDu, 0x26BEu },   { 0x26C4u, 0x26C5u },
+        { 0x26CEu, 0x26CEu },   { 0x26D4u, 0x26D4u },
+        { 0x26EAu, 0x26EAu },   { 0x26F2u, 0x26F3u },
+        { 0x26F5u, 0x26F5u },   { 0x26FAu, 0x26FAu },
+        { 0x26FDu, 0x26FDu },   { 0x2705u, 0x2705u },
+        { 0x270Au, 0x270Bu },   { 0x2728u, 0x2728u },
+        { 0x274Cu, 0x274Cu },   { 0x274Eu, 0x274Eu },
+        { 0x2753u, 0x2755u },   { 0x2757u, 0x2757u },
+        { 0x2795u, 0x2797u },   { 0x27B0u, 0x27B0u },
+        { 0x27BFu, 0x27BFu },   { 0x2B1Bu, 0x2B1Cu },
+        { 0x2B50u, 0x2B50u },   { 0x2B55u, 0x2B55u },
+        { 0x2E80u, 0x303Eu },   /* CJK radicals .. CJK punctuation  */
+        { 0x3041u, 0xA4CFu },   /* kana .. CJK .. Yi                */
+        { 0xA960u, 0xA97Fu },   /* hangul jamo extended-A           */
+        { 0xAC00u, 0xD7A3u },   /* hangul syllables                 */
+        { 0xF900u, 0xFAFFu },   /* CJK compatibility ideographs     */
+        { 0xFE10u, 0xFE19u },   /* vertical forms                   */
+        { 0xFE30u, 0xFE6Fu },   /* CJK compat forms, small forms    */
+        { 0xFF00u, 0xFF60u },   /* fullwidth forms                  */
+        { 0xFFE0u, 0xFFE6u },   /* fullwidth signs                  */
+        { 0x16FE0u, 0x16FE4u }, /* tangut marks                     */
+        { 0x17000u, 0x18AFFu }, /* tangut                           */
+        { 0x1B000u, 0x1B2FFu }, /* kana extensions                  */
+        { 0x1F004u, 0x1F004u }, { 0x1F0CFu, 0x1F0CFu },
+        { 0x1F18Eu, 0x1F18Eu }, { 0x1F191u, 0x1F19Au },
+        { 0x1F200u, 0x1F2FFu }, /* enclosed ideographic supplement  */
+        { 0x1F300u, 0x1F64Fu }, /* pictographs, emoticons           */
+        { 0x1F680u, 0x1F6FFu }, /* transport symbols                */
+        { 0x1F7E0u, 0x1F7FFu }, /* geometric shapes extended        */
+        { 0x1F900u, 0x1F9FFu }, /* supplemental symbols             */
+        { 0x1FA70u, 0x1FAFFu }, /* symbols extended-A               */
+        { 0x20000u, 0x2FFFDu }, /* CJK extension B and beyond       */
+        { 0x30000u, 0x3FFFDu }
+    };
+
+    static int
+    zetui__cp_in_table (zetui_u32 cp, const zetui__cp_range_t *t, int n)
+    {
+        int lo, hi, mid;
+
+        if (cp < t[0].first || cp > t[n - 1].last)
+            return 0;
+        lo = 0;
+        hi = n - 1;
+        while (lo <= hi)
+            {
+                mid = (lo + hi) / 2;
+                if (cp < t[mid].first)
+                    hi = mid - 1;
+                else if (cp > t[mid].last)
+                    lo = mid + 1;
+                else
+                    return 1;
+            }
+        return 0;
+    }
+
+    int
+    zetui_char_width (zetui_u32 cp)
+    {
+        if (cp < 0x20u || (cp >= 0x7Fu && cp < 0xA0u))
+            return 1; /* NUL and control bytes still occupy their cell */
+        if (zetui__cp_in_table (cp, zetui__zero_width,
+                                (int)(sizeof (zetui__zero_width)
+                                      / sizeof (zetui__zero_width[0]))))
+            return 0;
+        if (zetui__cp_in_table (cp, zetui__double_width,
+                                (int)(sizeof (zetui__double_width)
+                                      / sizeof (zetui__double_width[0]))))
+            return 2;
+        return 1;
+    }
+
+    /* ------------------------------------------------------------------ */
     /*  ANSI escape helpers                                                */
     /* ------------------------------------------------------------------ */
 
@@ -1029,9 +1182,45 @@ extern "C"
     void
     zetui_set_cell (zetui_ctx_t *ctx, int x, int y, zetui_cell_t cell)
     {
+        zetui_cell_t *bk;
+        size_t idx;
+
         if (x < 0 || y < 0 || x >= ctx->width || y >= ctx->height)
             return;
-        ctx->back[y * ctx->width + x] = cell;
+
+        bk = ctx->back;
+        idx = (size_t)(y * ctx->width + x);
+
+        /* Overwriting the tail of a wide character truncates it. */
+        if (bk[idx].ch == ZETUI_WIDE_PAD && cell.ch != ZETUI_WIDE_PAD
+            && x > 0 && zetui_char_width (bk[idx - 1].ch) == 2)
+            bk[idx - 1].ch = (zetui_u32)' ';
+
+        /* Overwriting the head of a wide character orphans its tail. */
+        if (zetui_char_width (bk[idx].ch) == 2 && x + 1 < ctx->width
+            && bk[idx + 1].ch == ZETUI_WIDE_PAD)
+            bk[idx + 1].ch = (zetui_u32)' ';
+
+        bk[idx] = cell;
+
+        if (zetui_char_width (cell.ch) == 2)
+            {
+                if (x + 1 >= ctx->width)
+                    {
+                        /* No room for the second column. */
+                        bk[idx].ch = (zetui_u32)' ';
+                    }
+                else
+                    {
+                        /* The tail may in turn cover another wide char. */
+                        if (zetui_char_width (bk[idx + 1].ch) == 2
+                            && x + 2 < ctx->width
+                            && bk[idx + 2].ch == ZETUI_WIDE_PAD)
+                            bk[idx + 2].ch = (zetui_u32)' ';
+                        bk[idx + 1] = cell;
+                        bk[idx + 1].ch = ZETUI_WIDE_PAD;
+                    }
+            }
     }
 
     zetui_cell_t
@@ -1045,8 +1234,9 @@ extern "C"
     zetui_error_t
     zetui_present (zetui_ctx_t *ctx)
     {
-        int x, y;
+        int x, y, cw;
         zetui_cell_t *f, *b;
+        zetui_u32 cp;
         char utf8[4];
         size_t ulen;
 
@@ -1067,6 +1257,14 @@ extern "C"
 
                         if (zetui__cells_eq (*b, *f))
                             continue;
+
+                        /* Wide-char tails are covered by the glyph in
+                           the cell to their left; emit nothing. */
+                        if (b->ch == ZETUI_WIDE_PAD)
+                            {
+                                *f = *b;
+                                continue;
+                            }
 
                         /* Hide the cursor while painting, but only if it
                            is actually shown: unconditional hide/show per
@@ -1089,11 +1287,20 @@ extern "C"
                                            &ctx->ren_fg, &ctx->ren_bg,
                                            &ctx->ren_attrs);
 
-                        ulen = zetui__utf8_enc (
-                            b->ch == 0u ? (zetui_u32)' ' : b->ch, utf8);
+                        cp = b->ch == 0u ? (zetui_u32)' ' : b->ch;
+                        ulen = zetui__utf8_enc (cp, utf8);
                         zetui__obuf_append (&ctx->out, utf8, ulen);
 
-                        ctx->ren_x++;
+                        /* Track how far the terminal cursor advanced;
+                           for zero-width codepoints the position is
+                           unreliable, so force a move next time. */
+                        cw = zetui_char_width (cp);
+                        if (cw == 2)
+                            ctx->ren_x += 2;
+                        else if (cw < 1)
+                            ctx->ren_x = -1;
+                        else
+                            ctx->ren_x++;
                         *f = *b;
                     }
             }
@@ -1696,7 +1903,7 @@ extern "C"
         const unsigned char *p;
         zetui_u32 cp;
         size_t avail;
-        int bytes, cx;
+        int bytes, cx, cw;
 
         if (!str)
             return;
@@ -1716,9 +1923,12 @@ extern "C"
                     break;
                 if (cp == (zetui_u32)'\n')
                     break;
-                zetui_set_cell (ctx, cx, y, zetui_cell_make (cp, style));
-                cx++;
                 p += bytes;
+                cw = zetui_char_width (cp);
+                if (cw <= 0)
+                    continue; /* combining marks etc. have no cell */
+                zetui_set_cell (ctx, cx, y, zetui_cell_make (cp, style));
+                cx += cw;
             }
     }
 

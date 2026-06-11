@@ -806,6 +806,19 @@ panel_utf8 (zetui_ctx_t *ctx, int x, int y, int w, int h)
                     "\xe2\x99\xa5 \xe2\x98\x85 \xe2\x9c\x93",
                     s);
 
+    /* Wide characters: zetui_char_width() == 2, two cells each */
+    row += 2;
+    zetui_draw_str (ctx, x, row, "Wide characters (two cells each):", hdr);
+    row++;
+    s = mk_style (ZETUI_COLOR_BRIGHT_GREEN, ZETUI_COLOR_DEFAULT,
+                  ZETUI_ATTR_NONE);
+    zetui_draw_str (ctx, x, row,
+                    "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e "         /* JP */
+                    "\xed\x95\x9c\xea\xb5\xad\xec\x96\xb4 "         /* KR */
+                    "\xe4\xb8\xad\xe6\x96\x87 "                     /* CN */
+                    "\xf0\x9f\x9a\x80\xf0\x9f\x8e\xae\xf0\x9f\x90\x8d",
+                    s);
+
     (void)w;
     (void)h;
 }
