@@ -111,6 +111,11 @@ pub const Key = enum(c_int) {
     _,
 };
 
+/// Encode R, G, B into a 24-bit "color" value for use in Style.rgb_fg / rgb_bg.
+pub fn rgb(r: u8, g: u8, b: u8) Rgb {
+    return .{ .r = r, .g = g, .b = b };
+}
+
 // ------------------------------------------------------------------ //
 // Box-drawing tables                                                  //
 // ------------------------------------------------------------------ //
@@ -145,15 +150,31 @@ pub fn boxCp(variant: BoxVariant, idx: usize) u21 {
 // Style                                                               //
 // ------------------------------------------------------------------ //
 
+pub const Rgb = struct {
+    r: u8,
+    g: u8,
+    b: u8,
+};
+
 pub const Style = struct {
     fg: Color = .default,
     bg: Color = .default,
     attrs: u32 = Attr.none,
+    rgb_fg: ?Rgb = null,
+    rgb_bg: ?Rgb = null,
 
     fn toC(self: Style) c.zetui_style_t {
+        const fg_val: i32 = if (self.rgb_fg) |v|
+            (@as(i32, 1) << 24) | (@as(i32, v.r) << 16) | (@as(i32, v.g) << 8) | @as(i32, v.b)
+        else
+            self.fg.toC();
+        const bg_val: i32 = if (self.rgb_bg) |v|
+            (@as(i32, 1) << 24) | (@as(i32, v.r) << 16) | (@as(i32, v.g) << 8) | @as(i32, v.b)
+        else
+            self.bg.toC();
         return .{
-            .fg = self.fg.toC(),
-            .bg = self.bg.toC(),
+            .fg = fg_val,
+            .bg = bg_val,
             .attrs = self.attrs,
         };
     }
@@ -213,6 +234,19 @@ pub const Event = union(enum) {
         }
     }
 };
+
+/// Split a C color value into its palette / 24-bit RGB representation.
+/// RGB-encoded values (bit 24 set) are not valid Color enum members.
+fn splitColor(v: i32) struct { palette: Color, rgb: ?Rgb } {
+    if ((v >> 24) == 1) {
+        return .{ .palette = .default, .rgb = .{
+            .r = @intCast((v >> 16) & 0xFF),
+            .g = @intCast((v >> 8) & 0xFF),
+            .b = @intCast(v & 0xFF),
+        } };
+    }
+    return .{ .palette = @enumFromInt(v), .rgb = null };
+}
 
 // ------------------------------------------------------------------ //
 // Error set                                                           //
@@ -281,12 +315,16 @@ pub const Context = struct {
     /// Get one cell from the back buffer.
     pub fn getCell(self: *const Context, x: i32, y: i32) Cell {
         const raw_cell = c.zetui_get_cell(self.raw, x, y);
+        const fg = splitColor(raw_cell.fg);
+        const bg = splitColor(raw_cell.bg);
         return .{
             .ch = raw_cell.ch,
             .style = .{
-                .fg = @enumFromInt(raw_cell.fg),
-                .bg = @enumFromInt(raw_cell.bg),
+                .fg = fg.palette,
+                .bg = bg.palette,
                 .attrs = raw_cell.attrs,
+                .rgb_fg = fg.rgb,
+                .rgb_bg = bg.rgb,
             },
         };
     }

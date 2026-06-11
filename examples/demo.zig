@@ -59,46 +59,77 @@ const color_names = [16][:0]const u8{
 };
 
 fn panelColors(tui: *zetui.Context, x: i32, y: i32, w: i32, h: i32) void {
-    _ = w;
-    _ = h;
     const hdr: zetui.Style = .{ .fg = .bright_white, .attrs = zetui.Attr.bold };
+    const limit = y + h;
+    var row = y;
 
     // 16 foreground colours
-    tui.drawStr(x, y, "16 foreground colors:", hdr);
-    for (0..16) |ci| {
-        const col: zetui.Color = @enumFromInt(ci);
-        const col_x = x + @as(i32, @intCast(ci % 8)) * 9;
-        const col_y = y + 1 + @as(i32, @intCast(ci / 8));
-        tui.drawStr(col_x, col_y, color_names[ci], .{ .fg = col });
+    if (row + 3 <= limit) {
+        tui.drawStr(x, row, "16 foreground colors:", hdr);
+        for (0..16) |ci| {
+            const col: zetui.Color = @enumFromInt(ci);
+            const col_x = x + @as(i32, @intCast(ci % 8)) * 9;
+            const col_y = row + 1 + @as(i32, @intCast(ci / 8));
+            tui.drawStr(col_x, col_y, color_names[ci], .{ .fg = col });
+        }
+        row += 4;
     }
 
     // 16 background colours
-    tui.drawStr(x, y + 4, "16 background colors:", hdr);
-    for (0..16) |ci| {
-        const col: zetui.Color = @enumFromInt(ci);
-        const col_x = x + @as(i32, @intCast(ci % 8)) * 9;
-        const col_y = y + 5 + @as(i32, @intCast(ci / 8));
-        tui.drawStr(col_x, col_y, color_names[ci], .{ .bg = col });
+    if (row + 3 <= limit) {
+        tui.drawStr(x, row, "16 background colors:", hdr);
+        for (0..16) |ci| {
+            const col: zetui.Color = @enumFromInt(ci);
+            const col_x = x + @as(i32, @intCast(ci % 8)) * 9;
+            const col_y = row + 1 + @as(i32, @intCast(ci / 8));
+            tui.drawStr(col_x, col_y, color_names[ci], .{ .bg = col });
+        }
+        row += 4;
     }
 
     // fg x bg matrix
-    tui.drawStr(x, y + 8, "fg x bg matrix (8 basic x 8 basic):", hdr);
-    for (0..8) |r| {
-        for (0..8) |c| {
-            tui.setCell(
-                x + @as(i32, @intCast(c)) * 2,
-                y + 9 + @as(i32, @intCast(r)),
-                .{
-                    .ch = 'A' + @as(u32, @intCast(r)),
-                    .style = .{ .fg = @enumFromInt(r), .bg = @enumFromInt(c) },
-                },
-            );
+    if (row + 9 <= limit) {
+        tui.drawStr(x, row, "fg x bg matrix (8 basic x 8 basic):", hdr);
+        row += 1;
+        for (0..8) |r| {
+            for (0..8) |c| {
+                tui.setCell(
+                    x + @as(i32, @intCast(c)) * 2,
+                    row + @as(i32, @intCast(r)),
+                    .{
+                        .ch = 'A' + @as(u32, @intCast(r)),
+                        .style = .{ .fg = @enumFromInt(r), .bg = @enumFromInt(c) },
+                    },
+                );
+            }
         }
+        row += 8;
     }
 
-    // zetui.Context.getCell reads back the buffer -- show it
-    tui.drawStr(x, y + 18, "zetui_style_default():", hdr);
-    tui.drawStr(x + 23, y + 18, "terminal default fg/bg", .{});
+    // RGB true-color gradient
+    if (row + 4 <= limit) {
+        tui.drawStr(x, row, "True-color RGB gradients:", hdr);
+        row += 1;
+        const grad_max: i32 = 48;
+        const grad_w = @min(w, grad_max);
+        var gi: i32 = 0;
+        while (gi < grad_w) : (gi += 1) {
+            const r: u8 = @intCast(@min(255, @as(u32, @intCast(gi * 5))));
+            const g: u8 = @intCast(@min(255, @as(u32, @intCast((grad_max - gi) * 5))));
+            const b: u8 = @intCast(@as(u32, @intCast(gi * 3)) % 256);
+            tui.setCell(x + gi, row, .{ .ch = 0x2588, .style = .{ .rgb_fg = zetui.rgb(r, g, b) } });
+            tui.setCell(x + gi, row + 1, .{ .ch = ' ', .style = .{ .rgb_bg = zetui.rgb(r, g, b) } });
+        }
+        row += 2;
+        tui.drawStr(x, row, "fg (upper) and bg (lower) smooth 24-bit color", .{ .fg = .bright_black });
+        row += 1;
+    }
+
+    // zetui_style_default
+    if (row + 1 <= limit) {
+        tui.drawStr(x, row, "zetui_style_default():", hdr);
+        tui.drawStr(x + 23, row, "terminal default fg/bg", .{});
+    }
 }
 
 // ================================================================== //

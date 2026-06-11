@@ -82,6 +82,27 @@ extern "C"
         ZETUI_COLOR_BRIGHT_WHITE = 15   /**< Bright white. */
     } zetui_color_t;
 
+    /** @brief Encode R, G, B into a 24-bit "color" value.
+     *
+     *  The result can be used anywhere a @c zetui_color_t value is expected
+     *  (both fields of @c zetui_style_t and @c zetui_cell_t).
+     *
+     *  @code
+     *      zetui_style_t s;
+     *      s.fg = ZETUI_COLOR_RGB(255, 128, 0);   // orange foreground
+     *      s.bg = ZETUI_COLOR_RGB(0, 0, 0);        // black background
+     *  @endcode
+     *
+     *  Terminals that do not support 24-bit colour ignore the escape sequence
+     *  and keep the previous colour.
+     */
+#define ZETUI_COLOR_RGB(r, g, b)                                              \
+    ((zetui_i32)((1u << 24) | ((zetui_u32)(r) << 16) | ((zetui_u32)(g) << 8)  \
+                 | (zetui_u32)(b)))
+
+/** @brief True if @p c was created with @c ZETUI_COLOR_RGB (vs a palette color). */
+#define ZETUI_COLOR_IS_RGB(c) ((zetui_u32)(c) >> 24)
+
     /* ================================================================== */
     /*  Cell attributes                                                    */
     /* ================================================================== */
@@ -599,6 +620,19 @@ extern "C"
     }
 
     /* ------------------------------------------------------------------ */
+    /*  Internal: input buffer                                             */
+    /* ------------------------------------------------------------------ */
+
+#define ZETUI__IBUF 64
+
+    typedef struct
+    {
+        unsigned char data[ZETUI__IBUF];
+        int len;
+        int pos;
+    } zetui__ibuf_t;
+
+    /* ------------------------------------------------------------------ */
     /*  Internal: full context definition                                  */
     /* ------------------------------------------------------------------ */
 
@@ -617,6 +651,9 @@ extern "C"
         size_t ncells;       /* width * height                    */
 
         zetui__obuf_t out;
+
+        /* Pending input bytes carried across poll/wait calls */
+        zetui__ibuf_t in;
 
         /* Rendering state carried across present() calls */
         zetui_i32 ren_fg;
@@ -803,6 +840,16 @@ extern "C"
                     {
                         zetui__obuf_append_str (ob, "\033[39m");
                     }
+                else if (ZETUI_COLOR_IS_RGB (fg))
+                    {
+                        zetui__obuf_append_str (ob, "\033[38;2;");
+                        zetui__obuf_append_int (ob, (fg >> 16) & 0xFF);
+                        zetui__obuf_append (ob, ";", 1u);
+                        zetui__obuf_append_int (ob, (fg >> 8) & 0xFF);
+                        zetui__obuf_append (ob, ";", 1u);
+                        zetui__obuf_append_int (ob, fg & 0xFF);
+                        zetui__obuf_append (ob, "m", 1u);
+                    }
                 else if (fg < 8)
                     {
                         zetui__obuf_append_str (ob, "\033[");
@@ -823,6 +870,16 @@ extern "C"
                 if (bg == ZETUI_COLOR_DEFAULT)
                     {
                         zetui__obuf_append_str (ob, "\033[49m");
+                    }
+                else if (ZETUI_COLOR_IS_RGB (bg))
+                    {
+                        zetui__obuf_append_str (ob, "\033[48;2;");
+                        zetui__obuf_append_int (ob, (bg >> 16) & 0xFF);
+                        zetui__obuf_append (ob, ";", 1u);
+                        zetui__obuf_append_int (ob, (bg >> 8) & 0xFF);
+                        zetui__obuf_append (ob, ";", 1u);
+                        zetui__obuf_append_int (ob, bg & 0xFF);
+                        zetui__obuf_append (ob, "m", 1u);
                     }
                 else if (bg < 8)
                     {
@@ -1185,15 +1242,6 @@ extern "C"
             { "\033OD", ZETUI_KEY_ARROW_LEFT },
             { NULL, ZETUI_KEY_NONE } };
 
-#define ZETUI__IBUF 64
-
-    typedef struct
-    {
-        unsigned char data[ZETUI__IBUF];
-        int len;
-        int pos;
-    } zetui__ibuf_t;
-
     static int
     zetui__ibuf_fill (zetui__ibuf_t *ib, int fd, int timeout_ms)
     {
@@ -1314,34 +1362,36 @@ extern "C"
     zetui_event_t
     zetui_poll_event (zetui_ctx_t *ctx)
     {
-        zetui__ibuf_t ib;
         zetui_event_t none;
 
         if (zetui__resize_flag)
             return zetui__resize_ev (ctx);
 
-        memset (&ib, 0, sizeof (ib));
-        if (zetui__ibuf_fill (&ib, ctx->fd_in, 0) <= 0)
+        if (ctx->in.pos < ctx->in.len)
+            return zetui__parse (&ctx->in);
+
+        if (zetui__ibuf_fill (&ctx->in, ctx->fd_in, 0) <= 0)
             {
                 memset (&none, 0, sizeof (none));
                 none.type = ZETUI_EVENT_NONE;
                 return none;
             }
-        return zetui__parse (&ib);
+        return zetui__parse (&ctx->in);
     }
 
     zetui_event_t
     zetui_wait_event (zetui_ctx_t *ctx, int timeout_ms)
     {
-        zetui__ibuf_t ib;
         zetui_event_t none;
         int ret;
 
         if (zetui__resize_flag)
             return zetui__resize_ev (ctx);
 
-        memset (&ib, 0, sizeof (ib));
-        ret = zetui__ibuf_fill (&ib, ctx->fd_in, timeout_ms);
+        if (ctx->in.pos < ctx->in.len)
+            return zetui__parse (&ctx->in);
+
+        ret = zetui__ibuf_fill (&ctx->in, ctx->fd_in, timeout_ms);
 
         if (ret <= 0)
             {
@@ -1351,7 +1401,7 @@ extern "C"
                 none.type = ZETUI_EVENT_NONE;
                 return none;
             }
-        return zetui__parse (&ib);
+        return zetui__parse (&ctx->in);
     }
 
     /* ------------------------------------------------------------------ */
@@ -1385,6 +1435,7 @@ extern "C"
     {
         const unsigned char *p;
         zetui_u32 cp;
+        size_t avail;
         int bytes, cx;
 
         if (!str)
@@ -1394,7 +1445,13 @@ extern "C"
 
         while (*p && cx < ctx->width)
             {
-                bytes = zetui__utf8_dec (p, 4u, &cp);
+                /* Never decode past the NUL terminator: a truncated
+                   multi-byte sequence at the end of the string must not
+                   read (or skip) beyond it. */
+                avail = 1u;
+                while (avail < 4u && p[avail] != 0u)
+                    avail++;
+                bytes = zetui__utf8_dec (p, avail, &cp);
                 if (bytes <= 0)
                     break;
                 if (cp == (zetui_u32)'\n')

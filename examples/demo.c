@@ -162,48 +162,98 @@ panel_colors (zetui_ctx_t *ctx, int x, int y, int w, int h)
             "Bblue  ", "Bmagnt.", "Bcyan  ", "Bwhite " };
     zetui_style_t hdr, s;
     int ci, r, c;
+    int limit = y + h;
+    int row = y;
 
     hdr = mk_style (ZETUI_COLOR_BRIGHT_WHITE, ZETUI_COLOR_DEFAULT,
                     ZETUI_ATTR_BOLD);
 
     /* -- Foreground colors ----------------------------------------- */
-    zetui_draw_str (ctx, x, y, "16 foreground colors:", hdr);
-    for (ci = 0; ci < 16; ci++)
+    if (row + 3 <= limit)
         {
-            s = mk_style (ci, ZETUI_COLOR_DEFAULT, ZETUI_ATTR_NONE);
-            zetui_draw_str (ctx, x + (ci % 8) * 9, y + 1 + (ci / 8), names[ci],
-                            s);
+            zetui_draw_str (ctx, x, row, "16 foreground colors:", hdr);
+            for (ci = 0; ci < 16; ci++)
+                {
+                    s = mk_style (ci, ZETUI_COLOR_DEFAULT, ZETUI_ATTR_NONE);
+                    zetui_draw_str (ctx, x + (ci % 8) * 9,
+                                    row + 1 + (ci / 8), names[ci], s);
+                }
+            row += 4;
         }
 
     /* -- Background colors ----------------------------------------- */
-    zetui_draw_str (ctx, x, y + 4, "16 background colors:", hdr);
-    for (ci = 0; ci < 16; ci++)
+    if (row + 3 <= limit)
         {
-            s = mk_style (ZETUI_COLOR_DEFAULT, ci, ZETUI_ATTR_NONE);
-            zetui_draw_str (ctx, x + (ci % 8) * 9, y + 5 + (ci / 8), names[ci],
-                            s);
+            zetui_draw_str (ctx, x, row, "16 background colors:", hdr);
+            for (ci = 0; ci < 16; ci++)
+                {
+                    s = mk_style (ZETUI_COLOR_DEFAULT, ci, ZETUI_ATTR_NONE);
+                    zetui_draw_str (ctx, x + (ci % 8) * 9,
+                                    row + 1 + (ci / 8), names[ci], s);
+                }
+            row += 4;
         }
 
     /* -- fg x bg matrix (8x8) -------------------------------------- */
-    zetui_draw_str (ctx, x, y + 8, "fg x bg matrix (8 basic x 8 basic):", hdr);
-    for (r = 0; r < 8; r++)
+    if (row + 9 <= limit)
         {
-            for (c = 0; c < 8; c++)
+            zetui_draw_str (ctx, x, row, "fg x bg matrix (8 basic x 8 basic):", hdr);
+            row += 1;
+            for (r = 0; r < 8; r++)
+                for (c = 0; c < 8; c++)
+                    {
+                        zetui_cell_t cell;
+                        cell = zetui_cell_make (
+                            (zetui_u32)'A' + (zetui_u32)r,
+                            mk_style (r, c, ZETUI_ATTR_NONE));
+                        zetui_set_cell (ctx, x + c * 2, row + r, cell);
+                    }
+            row += 8;
+        }
+
+    /* -- True-color RGB gradient ----------------------------------- */
+    if (row + 4 <= limit)
+        {
+            int gi;
+            zetui_cell_t cell;
+            zetui_style_t s;
+            int grad_max = 48;
+            int grad_w = w < grad_max ? w : grad_max;
+
+            zetui_draw_str (ctx, x, row, "True-color RGB gradients:", hdr);
+            row += 1;
+            for (gi = 0; gi < grad_w; gi++)
                 {
-                    zetui_cell_t cell;
-                    cell = zetui_cell_make ((zetui_u32)'A' + (zetui_u32)r,
-                                            mk_style (r, c, ZETUI_ATTR_NONE));
-                    zetui_set_cell (ctx, x + c * 2, y + 9 + r, cell);
+                    int rv = gi * 5 < 255 ? gi * 5 : 255;
+                    int gv = (grad_max - gi) * 5 < 255 ? (grad_max - gi) * 5 : 255;
+                    int bv = (gi * 3) % 256;
+                    s = zetui_style_default ();
+                    s.fg = ZETUI_COLOR_RGB (rv, gv, bv);
+                    cell = zetui_cell_make (0x2588u, s);
+                    zetui_set_cell (ctx, x + gi, row, cell);
+                    s = zetui_style_default ();
+                    s.bg = ZETUI_COLOR_RGB (rv, gv, bv);
+                    cell = zetui_cell_make ((zetui_u32)' ', s);
+                    zetui_set_cell (ctx, x + gi, row + 1, cell);
                 }
+            row += 2;
+            s = zetui_style_default ();
+            s.fg = ZETUI_COLOR_BRIGHT_BLACK;
+            zetui_draw_str (
+                ctx, x, row,
+                "fg (upper) and bg (lower) smooth 24-bit color", s);
+            row += 1;
         }
 
     /* -- zetui_style_default() demo -------------------------------- */
-    zetui_draw_str (ctx, x, y + 18, "zetui_style_default():", hdr);
-    zetui_draw_str (ctx, x + 23, y + 18, "terminal default fg/bg",
-                    zetui_style_default ());
+    if (row + 1 <= limit)
+        {
+            zetui_draw_str (ctx, x, row, "zetui_style_default():", hdr);
+            zetui_draw_str (ctx, x + 23, row, "terminal default fg/bg",
+                            zetui_style_default ());
+        }
 
     (void)w;
-    (void)h;
 }
 
 /* ================================================================== */
