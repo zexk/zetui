@@ -239,6 +239,18 @@ panel_colors (zetui_ctx_t *ctx, int x, int y, int w, int h)
                 }
             zetui_draw_str (ctx, x, row, "color support:", hdr);
             zetui_draw_str (ctx, x + 15, row, cap, zetui_style_default ());
+            row++;
+        }
+
+    /* -- OSC 8 hyperlink ------------------------------------------- */
+    if (row + 1 <= limit)
+        {
+            zetui_style_t link_style;
+            link_style = mk_style (ZETUI_COLOR_CYAN, ZETUI_COLOR_DEFAULT,
+                                   ZETUI_ATTR_UNDERLINE);
+            zetui_draw_str (ctx, x, row, "hyperlink:", hdr);
+            zetui_draw_link (ctx, x + 11, row, "github.com/zexk/zetui",
+                             "https://github.com/zexk/zetui", link_style);
         }
 
     (void)w;

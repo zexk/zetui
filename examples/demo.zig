@@ -109,6 +109,13 @@ fn panelColors(tui: *zetui.Context, x: i32, y: i32, w: i32, h: i32) void {
         };
         tui.drawStr(x, row, "color support:", hdr);
         tui.drawStr(x + 15, row, cap, .{});
+        row += 1;
+    }
+
+    // OSC 8 hyperlink
+    if (row + 1 <= limit) {
+        tui.drawStr(x, row, "hyperlink:", hdr);
+        tui.drawLink(x + 11, row, "github.com/zexk/zetui", "https://github.com/zexk/zetui", .{ .fg = .cyan, .attrs = zetui.Attr.underline });
     }
 }
 

@@ -210,9 +210,12 @@ pub const Style = struct {
 pub const Cell = struct {
     ch: u32 = ' ',
     style: Style = .{},
+    link: c_int = 0,
 
     fn toC(self: Cell) c.zetui_cell_t {
-        return c.zetui_cell_make(self.ch, self.style.toC());
+        var cc = c.zetui_cell_make(self.ch, self.style.toC());
+        cc.link = self.link;
+        return cc;
     }
 };
 
@@ -448,6 +451,16 @@ pub const Context = struct {
     /// Disable bracketed paste mode.
     pub fn pasteDisable(self: *Context) void {
         c.zetui_paste_disable(self.raw);
+    }
+
+    /// Register a hyperlink URI; returns a stable ID (1-based, 0 = failure).
+    pub fn registerLink(self: *Context, uri: [*:0]const u8) c_int {
+        return c.zetui_register_link(self.raw, uri);
+    }
+
+    /// Draw a null-terminated string with an OSC 8 hyperlink.
+    pub fn drawLink(self: *Context, x: i32, y: i32, str: [*:0]const u8, uri: [*:0]const u8, style: Style) void {
+        c.zetui_draw_link(self.raw, x, y, str, uri, style.toC());
     }
 
     /// Set the terminal window title (OSC 2).

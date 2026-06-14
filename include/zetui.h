@@ -160,6 +160,7 @@ extern "C"
         zetui_i32 fg;    /**< Foreground color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
         zetui_i32 bg;    /**< Background color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
         zetui_u32 attrs; /**< Attribute flags (@c ZETUI_ATTR_* OR-combined). */
+        int       link;  /**< Hyperlink ID from @c zetui_register_link(); 0 = none. */
     } zetui_cell_t;
 
     /* ================================================================== */
@@ -689,6 +690,25 @@ extern "C"
      */
     void zetui_set_title (zetui_ctx_t *ctx, const char *title);
 
+    /**
+     * @brief Register a hyperlink URI and return its stable ID (1-based).
+     *
+     * IDs are deduplicated — registering the same URI twice returns the same
+     * ID.  The table never shrinks; the caller must keep @c uri alive for the
+     * context lifetime.  Returns 0 on failure (NULL uri or table full).
+     */
+    int zetui_register_link (zetui_ctx_t *ctx, const char *uri);
+
+    /**
+     * @brief Draw a UTF-8 string with an OSC 8 hyperlink attached.
+     *
+     * Each cell produced by the draw call is stamped with the link ID
+     * returned by @c zetui_register_link(@c uri). @c zetui_present() emits
+     * the OSC 8 begin/end escape sequences during differential rendering.
+     */
+    void zetui_draw_link (zetui_ctx_t *ctx, int x, int y, const char *str,
+                          const char *uri, zetui_style_t style);
+
     /* ================================================================== */
     /*  IMPLEMENTATION                                                     */
     /* ================================================================== */
@@ -905,6 +925,13 @@ extern "C"
 
         /* Whether bracketed paste mode is enabled */
         int paste_on;
+
+        /* Hyperlink URI registry: IDs are 1-based; index 0 = ID 1 */
+        const char *link_uris[256];
+        int link_count;
+
+        /* Hyperlink render state carried across present() */
+        int ren_link;
 
         /* Color capability detected at init */
         zetui_color_support_t color_support;
@@ -1285,6 +1312,7 @@ extern "C"
         c.fg = ZETUI_COLOR_DEFAULT;
         c.bg = ZETUI_COLOR_DEFAULT;
         c.attrs = ZETUI_ATTR_NONE;
+        c.link = 0;
         return c;
     }
 
@@ -1292,7 +1320,7 @@ extern "C"
     zetui__cells_eq (zetui_cell_t a, zetui_cell_t b)
     {
         return a.ch == b.ch && a.fg == b.fg && a.bg == b.bg
-               && a.attrs == b.attrs;
+               && a.attrs == b.attrs && a.link == b.link;
     }
 
     static int
@@ -1408,6 +1436,7 @@ extern "C"
         ctx->ren_attrs = ZETUI_ATTR_NONE;
         ctx->ren_x = -1;
         ctx->ren_y = -1;
+        ctx->ren_link = 0;
 
         ctx->out.len = 0u;
 
@@ -1446,6 +1475,29 @@ extern "C"
                                 ctx->ren_y = y;
                             }
 
+                        /* emit OSC 8 if hyperlink state changed */
+                        if (b->link != ctx->ren_link)
+                            {
+                                if (b->link > 0
+                                    && b->link <= ctx->link_count)
+                                    {
+                                        zetui__obuf_append_str (&ctx->out,
+                                                                "\033]8;;");
+                                        zetui__obuf_append_str (
+                                            &ctx->out,
+                                            ctx->link_uris[b->link - 1]);
+                                        zetui__obuf_append (&ctx->out,
+                                                            "\033\\", 2u);
+                                    }
+                                else
+                                    {
+                                        zetui__obuf_append (&ctx->out,
+                                                            "\033]8;;\033\\",
+                                                            7u);
+                                    }
+                                ctx->ren_link = b->link;
+                            }
+
                         zetui__ansi_style (&ctx->out, b->fg, b->bg, b->attrs,
                                            &ctx->ren_fg, &ctx->ren_bg,
                                            &ctx->ren_attrs);
@@ -1466,6 +1518,13 @@ extern "C"
                             ctx->ren_x++;
                         *f = *b;
                     }
+            }
+
+        /* always close any open hyperlink at frame end */
+        if (ctx->ren_link != 0)
+            {
+                zetui__obuf_append (&ctx->out, "\033]8;;\033\\", 7u);
+                ctx->ren_link = 0;
             }
 
         if (ctx->cursor_visible)
@@ -2266,7 +2325,59 @@ extern "C"
         c.fg = style.fg;
         c.bg = style.bg;
         c.attrs = style.attrs;
+        c.link = 0;
         return c;
+    }
+
+    int
+    zetui_register_link (zetui_ctx_t *ctx, const char *uri)
+    {
+        int i;
+        if (!uri || !*uri || ctx->link_count >= 255)
+            return 0;
+        for (i = 0; i < ctx->link_count; i++)
+            if (ctx->link_uris[i] == uri
+                || strcmp (ctx->link_uris[i], uri) == 0)
+                return i + 1;
+        ctx->link_uris[ctx->link_count] = uri;
+        return ++ctx->link_count;
+    }
+
+    void
+    zetui_draw_link (zetui_ctx_t *ctx, int x, int y, const char *str,
+                     const char *uri, zetui_style_t style)
+    {
+        const unsigned char *p;
+        zetui_u32 cp;
+        size_t avail;
+        int bytes, cx, cw, link_id;
+        zetui_cell_t cell;
+
+        if (!str || !uri)
+            return;
+        link_id = zetui_register_link (ctx, uri);
+        p = (const unsigned char *)str;
+        cx = x;
+
+        while (*p && cx < ctx->width)
+            {
+                avail = 1u;
+                while (avail < 4u && p[avail] != 0u)
+                    avail++;
+                bytes = zetui__utf8_dec (p, avail, &cp);
+                if (bytes <= 0)
+                    break;
+                if (cp == (zetui_u32)'\n')
+                    break;
+                p += bytes;
+                cw = zetui_char_width (cp);
+                if (cw <= 0)
+                    continue;
+                cell = zetui_cell_make (cp, style);
+                cell.link = link_id;
+                zetui_set_cell (ctx, cx, y, cell);
+                cx += cw;
+            }
     }
 
     void
