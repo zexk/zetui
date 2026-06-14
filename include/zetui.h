@@ -680,6 +680,23 @@ extern "C"
 
     /* --- Cursor ------------------------------------------------------- */
 
+    /**
+     * @brief Hardware cursor shapes (DECSCUSR, CSI Ps SP q).
+     *
+     * Supported by most modern terminals (xterm, kitty, foot, alacritty).
+     * @c ZETUI_CURSOR_DEFAULT resets to the terminal's built-in preference.
+     */
+    typedef enum zetui_cursor_shape
+    {
+        ZETUI_CURSOR_DEFAULT            = 0, /**< Terminal default. */
+        ZETUI_CURSOR_BLOCK_BLINK        = 1, /**< Blinking block. */
+        ZETUI_CURSOR_BLOCK_STEADY       = 2, /**< Steady block. */
+        ZETUI_CURSOR_UNDERLINE_BLINK    = 3, /**< Blinking underline. */
+        ZETUI_CURSOR_UNDERLINE_STEADY   = 4, /**< Steady underline. */
+        ZETUI_CURSOR_BEAM_BLINK         = 5, /**< Blinking bar (I-beam). */
+        ZETUI_CURSOR_BEAM_STEADY        = 6  /**< Steady bar (I-beam). */
+    } zetui_cursor_shape_t;
+
     /** @brief Hide the hardware cursor. @param ctx Initialised context. */
     void zetui_cursor_hide (zetui_ctx_t *ctx);
 
@@ -693,6 +710,16 @@ extern "C"
      * @param y   Row (0-based).
      */
     void zetui_cursor_move (zetui_ctx_t *ctx, int x, int y);
+
+    /**
+     * @brief Set the hardware cursor shape via DECSCUSR.
+     *
+     * Emits @c CSI Ps SP q immediately. @c zetui_shutdown() restores
+     * @c ZETUI_CURSOR_DEFAULT automatically.
+     * @param ctx   Initialised context.
+     * @param shape One of the @c zetui_cursor_shape_t values.
+     */
+    void zetui_cursor_set_shape (zetui_ctx_t *ctx, zetui_cursor_shape_t shape);
 
     /* --- Terminal window --------------------------------------------- */
 
@@ -951,6 +978,7 @@ extern "C"
         int cursor_visible;
         int cursor_x;
         int cursor_y;
+        zetui_cursor_shape_t cursor_shape;
 
         /* Whether the terminal itself currently shows the cursor */
         int term_cursor_on;
@@ -1823,7 +1851,8 @@ extern "C"
         zetui_paste_disable (ctx);
         zetui_focus_disable (ctx);
         zetui_mouse_disable (ctx);
-        /* reset mouse pointer shape */
+        /* reset cursor shape and mouse pointer shape */
+        zetui__write_all (ctx->fd_out, "\033[ q", 4u);
         zetui__write_all (ctx->fd_out, "\033]22;\033\\", 7u);
         sigaction (SIGWINCH, &ctx->old_winch, NULL);
         sigprocmask (SIG_SETMASK, &ctx->orig_mask, NULL);
@@ -1875,6 +1904,21 @@ extern "C"
     {
         ctx->cursor_x = x;
         ctx->cursor_y = y;
+    }
+
+    void
+    zetui_cursor_set_shape (zetui_ctx_t *ctx, zetui_cursor_shape_t shape)
+    {
+        /* CSI Ps SP q  (DECSCUSR) */
+        char buf[8];
+        int ps = (int)shape; /* 0 = default, 1-6 as per enum */
+        buf[0] = '\033';
+        buf[1] = '[';
+        buf[2] = (char)('0' + ps);
+        buf[3] = ' ';
+        buf[4] = 'q';
+        zetui__write_all (ctx->fd_out, buf, 5u);
+        ctx->cursor_shape = shape;
     }
 
     void

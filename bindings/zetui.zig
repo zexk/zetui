@@ -17,6 +17,16 @@ const c = @cImport({
 // Re-export C constants and enums with Zig naming                    //
 // ------------------------------------------------------------------ //
 
+pub const CursorShape = enum(c_int) {
+    default           = c.ZETUI_CURSOR_DEFAULT,
+    block_blink       = c.ZETUI_CURSOR_BLOCK_BLINK,
+    block_steady      = c.ZETUI_CURSOR_BLOCK_STEADY,
+    underline_blink   = c.ZETUI_CURSOR_UNDERLINE_BLINK,
+    underline_steady  = c.ZETUI_CURSOR_UNDERLINE_STEADY,
+    beam_blink        = c.ZETUI_CURSOR_BEAM_BLINK,
+    beam_steady       = c.ZETUI_CURSOR_BEAM_STEADY,
+};
+
 pub const ColorSupport = enum(c_int) {
     @"16"       = c.ZETUI_COLOR_16,
     @"256"      = c.ZETUI_COLOR_256,
@@ -540,5 +550,8 @@ pub const Context = struct {
     }
     pub fn cursorMove(self: *Context, x: i32, y: i32) void {
         c.zetui_cursor_move(self.raw, x, y);
+    }
+    pub fn cursorSetShape(self: *Context, shape: CursorShape) void {
+        c.zetui_cursor_set_shape(self.raw, @intFromEnum(shape));
     }
 };
