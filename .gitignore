@@ -2,5 +2,4 @@
 zig-out/
 zig-cache/
 .zig-cache/
-docs/html/
-docs/latex/
+docs/

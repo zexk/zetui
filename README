@@ -78,10 +78,7 @@ See examples/hello.zig and examples/demo.zig.
 API REFERENCE
 -------------
 
-Generate locally with:
-
-    doxygen Doxyfile
-    # output: docs/html/index.html
+  https://github.com/zexk/zetui/wiki
 
 
 BUILD TARGETS
