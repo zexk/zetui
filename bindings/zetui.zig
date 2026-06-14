@@ -507,6 +507,20 @@ pub const Context = struct {
         c.zetui_set_title(self.raw, title);
     }
 
+    /// Copy a null-terminated string to the system clipboard via OSC 52.
+    pub fn setClipboard(self: *Context, str: [*:0]const u8) void {
+        c.zetui_set_clipboard(self.raw, str);
+    }
+
+    /// Copy a Zig slice to the system clipboard via OSC 52.
+    pub fn setClipboardSlice(self: *Context, str: []const u8) void {
+        var buf: [4096]u8 = undefined;
+        const n = @min(str.len, buf.len - 1);
+        @memcpy(buf[0..n], str[0..n]);
+        buf[n] = 0;
+        c.zetui_set_clipboard(self.raw, &buf);
+    }
+
     /// Set the terminal window title from a Zig slice.
     pub fn setTitleSlice(self: *Context, title: []const u8) void {
         var buf: [256]u8 = undefined;

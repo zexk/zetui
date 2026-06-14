@@ -776,6 +776,18 @@ extern "C"
     void zetui_set_title (zetui_ctx_t *ctx, const char *title);
 
     /**
+     * @brief Copy a string to the system clipboard via OSC 52.
+     *
+     * Base64-encodes @p str and emits @c OSC 52 ; c ; <b64> ST.
+     * Supported by most modern terminals (alacritty, kitty, xterm, foot);
+     * may be blocked in multiplexers without pass-through configured.
+     * Passing NULL or an empty string clears the clipboard selection.
+     * @param ctx Initialised context.
+     * @param str NUL-terminated UTF-8 string to place on the clipboard.
+     */
+    void zetui_set_clipboard (zetui_ctx_t *ctx, const char *str);
+
+    /**
      * @brief Register a hyperlink URI and return its stable ID (1-based).
      *
      * IDs are deduplicated — registering the same URI twice returns the same
@@ -1983,6 +1995,42 @@ extern "C"
             return;
         zetui__write_all (ctx->fd_out, "\033]2;", 4u);
         zetui__write_all (ctx->fd_out, title, strlen (title));
+        zetui__write_all (ctx->fd_out, "\033\\", 2u);
+    }
+
+    static const char zetui__b64_table[]
+        = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    /* Encode [src, src+len) as base64, write to fd. */
+    static void
+    zetui__b64_write (int fd, const unsigned char *src, size_t len)
+    {
+        unsigned char chunk[3];
+        char out[4];
+        size_t i;
+
+        for (i = 0u; i < len; i += 3u)
+            {
+                size_t rem = len - i;
+                chunk[0] = src[i];
+                chunk[1] = rem > 1u ? src[i + 1u] : 0u;
+                chunk[2] = rem > 2u ? src[i + 2u] : 0u;
+
+                out[0] = zetui__b64_table[chunk[0] >> 2];
+                out[1] = zetui__b64_table[((chunk[0] & 0x03u) << 4) | (chunk[1] >> 4)];
+                out[2] = rem > 1u ? zetui__b64_table[((chunk[1] & 0x0Fu) << 2) | (chunk[2] >> 6)] : '=';
+                out[3] = rem > 2u ? zetui__b64_table[chunk[2] & 0x3Fu] : '=';
+                zetui__write_all (fd, out, 4u);
+            }
+    }
+
+    void
+    zetui_set_clipboard (zetui_ctx_t *ctx, const char *str)
+    {
+        const unsigned char *src
+            = (const unsigned char *)(str ? str : "");
+        zetui__write_all (ctx->fd_out, "\033]52;c;", 7u);
+        zetui__b64_write (ctx->fd_out, src, strlen ((const char *)src));
         zetui__write_all (ctx->fd_out, "\033\\", 2u);
     }
 
