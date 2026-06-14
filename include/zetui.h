@@ -2683,6 +2683,7 @@ extern "C"
         s.fg = ZETUI_COLOR_DEFAULT;
         s.bg = ZETUI_COLOR_DEFAULT;
         s.attrs = ZETUI_ATTR_NONE;
+        s.ul_color = ZETUI_COLOR_DEFAULT;
         return s;
     }
 

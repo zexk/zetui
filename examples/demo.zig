@@ -112,10 +112,16 @@ fn panelColors(tui: *zetui.Context, x: i32, y: i32, w: i32, h: i32) void {
         row += 1;
     }
 
-    // OSC 8 hyperlink
-    if (row + 1 <= limit) {
+    // OSC 8 hyperlink + getLinkUri reverse lookup
+    if (row + 2 <= limit) {
+        const link_id = tui.registerLink("https://github.com/zexk/zetui");
         tui.drawStr(x, row, "hyperlink:", hdr);
         tui.drawLink(x + 11, row, "github.com/zexk/zetui", "https://github.com/zexk/zetui", .{ .fg = .cyan, .attrs = zetui.Attr.underline });
+        row += 1;
+        tui.drawStr(x, row, "get_link_uri:", hdr);
+        if (tui.getLinkUri(link_id)) |uri| {
+            tui.drawStr(x + 14, row, uri, .{ .fg = .bright_black });
+        }
     }
 }
 
@@ -152,6 +158,18 @@ fn panelAttrs(tui: *zetui.Context, x: i32, y: i32, w: i32, h: i32) void {
     tui.drawStr(x, y + 14, "  BOLD | REVERSE    (red fg, yellow bg)", .{ .fg = .red, .bg = .yellow, .attrs = zetui.Attr.bold | zetui.Attr.reverse });
     tui.drawStr(x, y + 15, "  DIM | ITALIC | STRIKE", .{ .attrs = zetui.Attr.dim | zetui.Attr.italic | zetui.Attr.strike });
     tui.drawStr(x, y + 16, "  BOLD | BLINK | UNDERLINE  (bright green)", .{ .fg = .bright_green, .attrs = zetui.Attr.bold | zetui.Attr.blink | zetui.Attr.underline });
+
+    // Styled underlines (v0.4.0)
+    tui.drawStr(x, y + 18, "Styled underlines + underline color (v0.4.0):", hdr);
+    tui.drawStr(x, y + 19, "  UNDERLINE_DOUBLE", .{ .attrs = zetui.Attr.underline_double });
+    tui.drawStr(x, y + 20, "  UNDERLINE_CURLY   (red underline color)", .{ .attrs = zetui.Attr.underline_curly, .rgb_ul = zetui.rgb(255, 80, 80) });
+    tui.drawStr(x, y + 21, "  UNDERLINE_DOTTED  (green underline color)", .{ .attrs = zetui.Attr.underline_dotted, .rgb_ul = zetui.rgb(80, 200, 80) });
+    tui.drawStr(x, y + 22, "  UNDERLINE_DASHED  (blue underline color)", .{ .attrs = zetui.Attr.underline_dashed, .rgb_ul = zetui.rgb(100, 150, 255) });
+
+    // draw_printf_len clipped formatted draw
+    tui.drawStr(x, y + 24, "drawFmtLen (clipped formatted draw):", hdr);
+    _ = tui.drawFmtLen(x, y + 25, 24, .{ .fg = .bright_yellow }, "Hello, World! (extra padding ignored)", .{});
+    tui.drawStr(x + 25, y + 25, "<-- clipped to 24 cols", .{ .fg = .bright_black });
 }
 
 // ================================================================== //
@@ -602,7 +620,7 @@ fn drawChrome(tui: *zetui.Context, sel: usize, total: i32) void {
     }
 
     // Status bar
-    tui.drawStr(1, h - 1, " q:quit  Tab/1-6:switch panel", dim);
+    tui.drawStr(1, h - 1, " q:quit  Tab/1-6:switch panel  Ctrl-Z:suspend", dim);
     {
         var buf: [32]u8 = undefined;
         const s = std.fmt.bufPrint(&buf, "events:{d}", .{total}) catch return;
@@ -620,6 +638,7 @@ pub fn main() !void {
 
     tui.cursorHide();
     tui.setTitle("zetui demo");
+    tui.setIconTitle("zetui demo");
     tui.mouseEnable();  // SGR mouse: shown on the Input panel
     tui.focusEnable();  // focus events: shown on the Input panel
     tui.pasteEnable();  // bracketed paste: shown on the Input panel
@@ -667,6 +686,10 @@ pub fn main() !void {
         switch (ev) {
             .key => |ke| {
                 if (ke.key == .ctrl_c or ke.ch == 'q') running = false;
+                if (ke.key == .ctrl_z) {
+                    tui.suspendTui();
+                    tui.resumeTui();
+                }
                 if (ke.key == .tab)
                     sel = (sel + 1) % NUM_PANELS;
                 if (ke.ch >= '1' and ke.ch <= '6')

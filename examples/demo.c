@@ -113,6 +113,7 @@ mk_style (zetui_i32 fg, zetui_i32 bg, zetui_u32 attrs)
     s.fg = fg;
     s.bg = bg;
     s.attrs = attrs;
+    s.ul_color = ZETUI_COLOR_DEFAULT;
     return s;
 }
 
@@ -242,15 +243,25 @@ panel_colors (zetui_ctx_t *ctx, int x, int y, int w, int h)
             row++;
         }
 
-    /* -- OSC 8 hyperlink ------------------------------------------- */
-    if (row + 1 <= limit)
+    /* -- OSC 8 hyperlink + zetui_get_link_uri ---------------------- */
+    if (row + 2 <= limit)
         {
-            zetui_style_t link_style;
+            zetui_style_t link_style, dim_s;
+            const char *uri;
+            int link_id;
             link_style = mk_style (ZETUI_COLOR_CYAN, ZETUI_COLOR_DEFAULT,
                                    ZETUI_ATTR_UNDERLINE);
+            dim_s = mk_style (ZETUI_COLOR_BRIGHT_BLACK, ZETUI_COLOR_DEFAULT,
+                              ZETUI_ATTR_NONE);
             zetui_draw_str (ctx, x, row, "hyperlink:", hdr);
+            link_id = zetui_register_link (ctx, "https://github.com/zexk/zetui");
             zetui_draw_link (ctx, x + 11, row, "github.com/zexk/zetui",
                              "https://github.com/zexk/zetui", link_style);
+            row++;
+            zetui_draw_str (ctx, x, row, "get_link_uri:", hdr);
+            uri = zetui_get_link_uri (ctx, link_id);
+            if (uri)
+                zetui_draw_str (ctx, x + 14, row, uri, dim_s);
         }
 
     (void)w;
@@ -319,6 +330,49 @@ panel_attrs (zetui_ctx_t *ctx, int x, int y, int w, int h)
                   ZETUI_ATTR_BOLD | ZETUI_ATTR_BLINK | ZETUI_ATTR_UNDERLINE);
     zetui_draw_str (ctx, x, row++, "  BOLD | BLINK | UNDERLINE  (bright green)",
                     s);
+
+    /* -- Styled underlines (v0.4.0) -------------------------------- */
+    row++;
+    zetui_draw_str (ctx, x, row++,
+                    "Styled underlines + underline color (v0.4.0):", hdr);
+
+    s = mk_style (ZETUI_COLOR_DEFAULT, ZETUI_COLOR_DEFAULT,
+                  ZETUI_ATTR_UNDERLINE_DOUBLE);
+    zetui_draw_str (ctx, x, row++, "  UNDERLINE_DOUBLE", s);
+
+    s = mk_style (ZETUI_COLOR_DEFAULT, ZETUI_COLOR_DEFAULT,
+                  ZETUI_ATTR_UNDERLINE_CURLY);
+    s.ul_color = ZETUI_COLOR_RGB (255, 80, 80);
+    zetui_draw_str (ctx, x, row++,
+                    "  UNDERLINE_CURLY   (red underline color)", s);
+
+    s = mk_style (ZETUI_COLOR_DEFAULT, ZETUI_COLOR_DEFAULT,
+                  ZETUI_ATTR_UNDERLINE_DOTTED);
+    s.ul_color = ZETUI_COLOR_RGB (80, 200, 80);
+    zetui_draw_str (ctx, x, row++,
+                    "  UNDERLINE_DOTTED  (green underline color)", s);
+
+    s = mk_style (ZETUI_COLOR_DEFAULT, ZETUI_COLOR_DEFAULT,
+                  ZETUI_ATTR_UNDERLINE_DASHED);
+    s.ul_color = ZETUI_COLOR_RGB (100, 150, 255);
+    zetui_draw_str (ctx, x, row++,
+                    "  UNDERLINE_DASHED  (blue underline color)", s);
+
+    /* -- zetui_draw_printf_len ------------------------------------- */
+    row++;
+    zetui_draw_str (ctx, x, row++,
+                    "zetui_draw_printf_len (clipped formatted draw):", hdr);
+    {
+        zetui_style_t ts, ds;
+        ts = mk_style (ZETUI_COLOR_BRIGHT_YELLOW, ZETUI_COLOR_DEFAULT,
+                       ZETUI_ATTR_NONE);
+        ds = mk_style (ZETUI_COLOR_BRIGHT_BLACK, ZETUI_COLOR_DEFAULT,
+                       ZETUI_ATTR_NONE);
+        zetui_draw_printf_len (ctx, x, row, 24, ts,
+                               "Hello, World! (extra padding ignored)");
+        zetui_draw_str (ctx, x + 25, row, "<-- clipped to 24 cols", ds);
+        row++;
+    }
 
     (void)w;
     (void)h;
@@ -532,6 +586,8 @@ key_name (zetui_key_t k)
             return "F11";
         case ZETUI_KEY_F12:
             return "F12";
+        case ZETUI_KEY_SHIFT_TAB:
+            return "Shift-Tab";
         default:
             return "unknown";
         }
@@ -1113,7 +1169,8 @@ draw_chrome (zetui_ctx_t *ctx, int sel, int total, zetui_event_t *last)
         }
 
     /* Status bar */
-    zetui_draw_str (ctx, 1, h - 1, " q:quit  Tab/1-6:switch panel", dim_sty);
+    zetui_draw_str (ctx, 1, h - 1,
+                    " q:quit  Tab/1-6:switch panel  Ctrl-Z:suspend", dim_sty);
 
     pos = 0;
     sb_str (buf, &pos, "events:");
@@ -1140,6 +1197,7 @@ main (void)
         return 1;
 
     zetui_set_title (ctx, "zetui demo");
+    zetui_set_icon_title (ctx, "zetui demo");
     zetui_cursor_hide (ctx); /* hide cursor during normal navigation */
     zetui_mouse_enable (ctx);  /* SGR mouse: shown on the Input panel */
     zetui_focus_enable (ctx);  /* focus events: shown on the Input panel */
@@ -1220,6 +1278,12 @@ main (void)
 
                     if (ke->key == ZETUI_KEY_CTRL_C || ke->ch == (zetui_u32)'q')
                         running = 0;
+
+                    if (ke->key == ZETUI_KEY_CTRL_Z)
+                        {
+                            zetui_suspend (ctx);
+                            zetui_resume (ctx);
+                        }
 
                     if (ke->key == ZETUI_KEY_TAB)
                         sel = (sel + 1) % NUM_PANELS;
