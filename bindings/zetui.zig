@@ -521,6 +521,11 @@ pub const Context = struct {
         c.zetui_draw_str(self.raw, x, y, str, style.toC());
     }
 
+    /// Draw at most max_cols display columns; returns columns written.
+    pub fn drawStrLen(self: *Context, x: i32, y: i32, str: [*:0]const u8, max_cols: i32, style: Style) i32 {
+        return c.zetui_draw_str_len(self.raw, x, y, str, max_cols, style.toC());
+    }
+
     /// Draw a Zig slice (copies to a stack buffer with null terminator).
     pub fn drawSlice(self: *Context, x: i32, y: i32, str: []const u8, style: Style) void {
         var buf: [4096]u8 = undefined;

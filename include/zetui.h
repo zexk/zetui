@@ -641,6 +641,23 @@ extern "C"
                          zetui_style_t style);
 
     /**
+     * @brief Draw a UTF-8 string clipped to at most @p max_cols display columns.
+     *
+     * Stops at the first of: end of string, a newline, @p max_cols columns
+     * consumed, or the right edge of the screen.  Wide characters that would
+     * straddle the column limit are not drawn.
+     * @param ctx      Initialised context.
+     * @param x        Starting column.
+     * @param y        Row.
+     * @param str      NUL-terminated UTF-8 string.
+     * @param max_cols Maximum display columns to consume (negative = unlimited).
+     * @param style    Visual style applied to every cell.
+     * @return         Number of display columns actually written.
+     */
+    int zetui_draw_str_len (zetui_ctx_t *ctx, int x, int y, const char *str,
+                            int max_cols, zetui_style_t style);
+
+    /**
      * @brief Draw a box-drawing rectangle.
      * @param ctx      Initialised context.
      * @param x        Left column.
@@ -2573,6 +2590,44 @@ extern "C"
                 zetui_set_cell (ctx, cx, y, zetui_cell_make (cp, style));
                 cx += cw;
             }
+    }
+
+    int
+    zetui_draw_str_len (zetui_ctx_t *ctx, int x, int y, const char *str,
+                        int max_cols, zetui_style_t style)
+    {
+        const unsigned char *p;
+        zetui_u32 cp;
+        size_t avail;
+        int bytes, cx, cw, cols_left;
+
+        if (!str)
+            return 0;
+        p = (const unsigned char *)str;
+        cx = x;
+        cols_left = (max_cols < 0) ? ctx->width : max_cols;
+
+        while (*p && cx < ctx->width && cols_left > 0)
+            {
+                avail = 1u;
+                while (avail < 4u && p[avail] != 0u)
+                    avail++;
+                bytes = zetui__utf8_dec (p, avail, &cp);
+                if (bytes <= 0)
+                    break;
+                if (cp == (zetui_u32)'\n')
+                    break;
+                p += bytes;
+                cw = zetui_char_width (cp);
+                if (cw <= 0)
+                    continue;
+                if (cw > cols_left)
+                    break; /* wide char won't fit in remaining budget */
+                zetui_set_cell (ctx, cx, y, zetui_cell_make (cp, style));
+                cx += cw;
+                cols_left -= cw;
+            }
+        return cx - x;
     }
 
     void
