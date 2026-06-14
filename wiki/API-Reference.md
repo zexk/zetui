@@ -506,6 +506,12 @@ void zetui_set_title(zetui_ctx_t *ctx, const char *title);
 ```
 Set the terminal window title via OSC 2. The string must be NUL-terminated and must not contain control bytes. Accepted by most modern terminal emulators.
 
+#### `zetui_set_icon_title`
+```c
+void zetui_set_icon_title(zetui_ctx_t *ctx, const char *title);
+```
+Set the terminal icon/taskbar title via OSC 1. Historically controls the label shown in taskbars and minimised windows; many terminals treat it the same as OSC 2. The string must be NUL-terminated and must not contain control bytes.
+
 #### `zetui_set_clipboard`
 ```c
 void zetui_set_clipboard(zetui_ctx_t *ctx, const char *str);

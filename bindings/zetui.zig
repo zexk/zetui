@@ -561,6 +561,20 @@ pub const Context = struct {
         c.zetui_set_title(self.raw, &buf);
     }
 
+    /// Set the terminal icon/taskbar title via OSC 1.
+    pub fn setIconTitle(self: *Context, title: [*:0]const u8) void {
+        c.zetui_set_icon_title(self.raw, title);
+    }
+
+    /// Set the terminal icon/taskbar title from a Zig slice.
+    pub fn setIconTitleSlice(self: *Context, title: []const u8) void {
+        var buf: [256]u8 = undefined;
+        const n = @min(title.len, buf.len - 1);
+        @memcpy(buf[0..n], title[0..n]);
+        buf[n] = 0;
+        c.zetui_set_icon_title(self.raw, &buf);
+    }
+
     /// Draw a null-terminated UTF-8 string.
     pub fn drawStr(self: *Context, x: i32, y: i32, str: [*:0]const u8, style: Style) void {
         c.zetui_draw_str(self.raw, x, y, str, style.toC());

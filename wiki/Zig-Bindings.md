@@ -130,6 +130,8 @@ tui.drawStr(1, 3, "error text", err_style);
 | `ctx.cursorSetShape(shape: CursorShape)` | `zetui_cursor_set_shape()` |
 | `ctx.setTitle(title)` | `zetui_set_title()` |
 | `ctx.setTitleSlice(slice)` | `zetui_set_title()` (copies to stack buf) |
+| `ctx.setIconTitle(title)` | `zetui_set_icon_title()` |
+| `ctx.setIconTitleSlice(slice)` | `zetui_set_icon_title()` (copies to stack buf) |
 | `ctx.setClipboard(str)` | `zetui_set_clipboard()` |
 | `ctx.setClipboardSlice(slice)` | `zetui_set_clipboard()` (copies to stack buf) |
 | `ctx.setPointerShape(name)` | `zetui_set_pointer_shape()` |

@@ -825,6 +825,18 @@ extern "C"
     void zetui_set_title (zetui_ctx_t *ctx, const char *title);
 
     /**
+     * @brief Set the terminal icon / taskbar title via OSC 1.
+     *
+     * Sends @c OSC 1 ; title ST. Historically sets the icon name shown in
+     * taskbars and minimised windows; many terminals map it to the same label
+     * as OSC 2. @c title must be NUL-terminated and should not contain
+     * control bytes.
+     * @param ctx   Initialised context.
+     * @param title NUL-terminated title string.
+     */
+    void zetui_set_icon_title (zetui_ctx_t *ctx, const char *title);
+
+    /**
      * @brief Copy a string to the system clipboard via OSC 52.
      *
      * Base64-encodes @p str and emits @c OSC 52 ; c ; <b64> ST.
@@ -2133,6 +2145,16 @@ extern "C"
         if (!title)
             return;
         zetui__write_all (ctx->fd_out, "\033]2;", 4u);
+        zetui__write_all (ctx->fd_out, title, strlen (title));
+        zetui__write_all (ctx->fd_out, "\033\\", 2u);
+    }
+
+    void
+    zetui_set_icon_title (zetui_ctx_t *ctx, const char *title)
+    {
+        if (!title)
+            return;
+        zetui__write_all (ctx->fd_out, "\033]1;", 4u);
         zetui__write_all (ctx->fd_out, title, strlen (title));
         zetui__write_all (ctx->fd_out, "\033\\", 2u);
     }
