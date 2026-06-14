@@ -7,6 +7,7 @@ pub fn main() !void {
     var tui = try zetui.Context.init();
     defer tui.deinit();
 
+    tui.setTitle("zetui hello");
     tui.cursorHide();
 
     var running = true;

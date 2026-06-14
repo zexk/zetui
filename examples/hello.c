@@ -31,6 +31,7 @@ main (void)
     dim.bg = ZETUI_COLOR_DEFAULT;
     dim.attrs = ZETUI_ATTR_DIM;
 
+    zetui_set_title (ctx, "zetui hello");
     zetui_cursor_hide (ctx);
     running = 1;
 

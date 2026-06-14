@@ -653,6 +653,18 @@ extern "C"
      */
     void zetui_cursor_move (zetui_ctx_t *ctx, int x, int y);
 
+    /* --- Terminal window --------------------------------------------- */
+
+    /**
+     * @brief Set the terminal window title.
+     *
+     * Sends @c OSC 2 ; title ST. Accepted by most modern terminal emulators.
+     * @c title must be NUL-terminated and should not contain control bytes.
+     * @param ctx   Initialised context.
+     * @param title NUL-terminated title string.
+     */
+    void zetui_set_title (zetui_ctx_t *ctx, const char *title);
+
     /* ================================================================== */
     /*  IMPLEMENTATION                                                     */
     /* ================================================================== */
@@ -1693,6 +1705,16 @@ extern "C"
     {
         ctx->cursor_x = x;
         ctx->cursor_y = y;
+    }
+
+    void
+    zetui_set_title (zetui_ctx_t *ctx, const char *title)
+    {
+        if (!title)
+            return;
+        zetui__write_all (ctx->fd_out, "\033]2;", 4u);
+        zetui__write_all (ctx->fd_out, title, strlen (title));
+        zetui__write_all (ctx->fd_out, "\033\\", 2u);
     }
 
     /* ------------------------------------------------------------------ */

@@ -598,6 +598,7 @@ pub fn main() !void {
     defer tui.deinit();
 
     tui.cursorHide();
+    tui.setTitle("zetui demo");
     tui.mouseEnable();  // SGR mouse: shown on the Input panel
     tui.focusEnable();  // focus events: shown on the Input panel
     tui.pasteEnable();  // bracketed paste: shown on the Input panel

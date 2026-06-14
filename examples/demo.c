@@ -1103,6 +1103,7 @@ main (void)
     if (!ctx)
         return 1;
 
+    zetui_set_title (ctx, "zetui demo");
     zetui_cursor_hide (ctx); /* hide cursor during normal navigation */
     zetui_mouse_enable (ctx);  /* SGR mouse: shown on the Input panel */
     zetui_focus_enable (ctx);  /* focus events: shown on the Input panel */
