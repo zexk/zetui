@@ -257,7 +257,8 @@ extern "C"
         ZETUI_KEY_F9 = 274,
         ZETUI_KEY_F10 = 275,
         ZETUI_KEY_F11 = 276,
-        ZETUI_KEY_F12 = 277
+        ZETUI_KEY_F12 = 277,
+        ZETUI_KEY_SHIFT_TAB = 278 /**< Shift+Tab (ESC [ Z / backtab). */
     } zetui_key_t;
 
     /** @defgroup mods Key Modifiers
@@ -1970,6 +1971,7 @@ extern "C"
             { "\033OB", ZETUI_KEY_ARROW_DOWN },
             { "\033OC", ZETUI_KEY_ARROW_RIGHT },
             { "\033OD", ZETUI_KEY_ARROW_LEFT },
+            { "\033[Z", ZETUI_KEY_SHIFT_TAB },
             { NULL, ZETUI_KEY_NONE } };
 
     /* Wait up to timeout_ms for input and append it to the buffer.

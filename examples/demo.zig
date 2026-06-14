@@ -267,6 +267,7 @@ fn keyName(k: zetui.Key) []const u8 {
         .f10 => "F10",
         .f11 => "F11",
         .f12 => "F12",
+        .shift_tab => "Shift-Tab",
         _ => "unknown",
     };
 }

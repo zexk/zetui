@@ -127,7 +127,8 @@ pub const Key = enum(c_int) {
     f9 = c.ZETUI_KEY_F9,
     f10 = c.ZETUI_KEY_F10,
     f11 = c.ZETUI_KEY_F11,
-    f12 = c.ZETUI_KEY_F12,
+    f12         = c.ZETUI_KEY_F12,
+    shift_tab   = c.ZETUI_KEY_SHIFT_TAB,
     _,
 };
 
