@@ -185,13 +185,21 @@ pub const Style = struct {
     attrs: u32 = Attr.none,
     rgb_fg: ?Rgb = null,
     rgb_bg: ?Rgb = null,
+    /// xterm 256-color palette index for the foreground (overrides fg and rgb_fg).
+    pal_fg: ?u8 = null,
+    /// xterm 256-color palette index for the background (overrides bg and rgb_bg).
+    pal_bg: ?u8 = null,
 
     fn toC(self: Style) c.zetui_style_t {
-        const fg_val: i32 = if (self.rgb_fg) |v|
+        const fg_val: i32 = if (self.pal_fg) |n|
+            (@as(i32, 1) << 25) | @as(i32, n)
+        else if (self.rgb_fg) |v|
             (@as(i32, 1) << 24) | (@as(i32, v.r) << 16) | (@as(i32, v.g) << 8) | @as(i32, v.b)
         else
             self.fg.toC();
-        const bg_val: i32 = if (self.rgb_bg) |v|
+        const bg_val: i32 = if (self.pal_bg) |n|
+            (@as(i32, 1) << 25) | @as(i32, n)
+        else if (self.rgb_bg) |v|
             (@as(i32, 1) << 24) | (@as(i32, v.r) << 16) | (@as(i32, v.g) << 8) | @as(i32, v.b)
         else
             self.bg.toC();
@@ -311,17 +319,20 @@ pub const Event = union(enum) {
     }
 };
 
-/// Split a C color value into its palette / 24-bit RGB representation.
-/// RGB-encoded values (bit 24 set) are not valid Color enum members.
-fn splitColor(v: i32) struct { palette: Color, rgb: ?Rgb } {
-    if ((v >> 24) == 1) {
+/// Split a C color value into its palette / 24-bit RGB / 256-color representation.
+fn splitColor(v: i32) struct { palette: Color, rgb: ?Rgb, pal: ?u8 } {
+    const uv: u32 = @bitCast(v);
+    if ((uv >> 25) == 1) {
+        return .{ .palette = .default, .rgb = null, .pal = @intCast(uv & 0xFF) };
+    }
+    if ((uv >> 24) == 1) {
         return .{ .palette = .default, .rgb = .{
             .r = @intCast((v >> 16) & 0xFF),
             .g = @intCast((v >> 8) & 0xFF),
             .b = @intCast(v & 0xFF),
-        } };
+        }, .pal = null };
     }
-    return .{ .palette = @enumFromInt(v), .rgb = null };
+    return .{ .palette = @enumFromInt(v), .rgb = null, .pal = null };
 }
 
 // ------------------------------------------------------------------ //
@@ -408,6 +419,8 @@ pub const Context = struct {
                 .attrs = raw_cell.attrs,
                 .rgb_fg = fg.rgb,
                 .rgb_bg = bg.rgb,
+                .pal_fg = fg.pal,
+                .pal_bg = bg.pal,
             },
         };
     }
@@ -456,6 +469,16 @@ pub const Context = struct {
     /// Register a hyperlink URI; returns a stable ID (1-based, 0 = failure).
     pub fn registerLink(self: *Context, uri: [*:0]const u8) c_int {
         return c.zetui_register_link(self.raw, uri);
+    }
+
+    /// Return the hyperlink ID at (x, y) in the front buffer; 0 if none.
+    pub fn getLink(self: *const Context, x: i32, y: i32) c_int {
+        return c.zetui_get_link_at(self.raw, x, y);
+    }
+
+    /// Change the mouse pointer sprite via OSC 22 (e.g. "pointer", "default").
+    pub fn setPointerShape(self: *Context, name: [*:0]const u8) void {
+        c.zetui_set_pointer_shape(self.raw, name);
     }
 
     /// Draw a null-terminated string with an OSC 8 hyperlink.

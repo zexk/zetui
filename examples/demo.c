@@ -1224,6 +1224,12 @@ main (void)
                     if (ke->ch >= (zetui_u32)'1' && ke->ch <= (zetui_u32)'6')
                         sel = (int)(ke->ch - (zetui_u32)'1');
                 }
+            else if (ev.type == ZETUI_EVENT_MOUSE)
+                {
+                    int lnk = zetui_get_link_at (ctx, ev.data.mouse.x,
+                                                  ev.data.mouse.y);
+                    zetui_set_pointer_shape (ctx, lnk ? "pointer" : "default");
+                }
             /* ZETUI_EVENT_RESIZE: just loop — zetui_width/height updated */
 
             /*
@@ -1237,6 +1243,14 @@ main (void)
                     {
                         total++;
                         last_ev = extra;
+                        if (extra.type == ZETUI_EVENT_MOUSE)
+                            {
+                                int lnk = zetui_get_link_at (
+                                    ctx, extra.data.mouse.x,
+                                    extra.data.mouse.y);
+                                zetui_set_pointer_shape (
+                                    ctx, lnk ? "pointer" : "default");
+                            }
                     }
             }
         }

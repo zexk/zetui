@@ -117,6 +117,22 @@ extern "C"
 /** @brief True if @p c was created with @c ZETUI_COLOR_RGB (vs a palette color). */
 #define ZETUI_COLOR_IS_RGB(c) (((zetui_u32)(c) >> 24) == 1u)
 
+    /** @brief Encode an xterm 256-color palette index (0–255) as a color value.
+     *
+     *  The result can be used anywhere a @c zetui_color_t value is expected.
+     *  Terminals that report @c ZETUI_COLOR_256 or @c ZETUI_COLOR_TRUECOLOR
+     *  will render the chosen palette entry via @c ESC[38;5;Nm.
+     *  @code
+     *      s.fg = ZETUI_COLOR_256(196);  // xterm red
+     *      s.bg = ZETUI_COLOR_256(232);  // near-black
+     *  @endcode
+     */
+#define ZETUI_COLOR_256(n) \
+    ((zetui_i32)((1u << 25) | ((zetui_u32)(n) & 0xFFu)))
+
+/** @brief True if @p c was created with @c ZETUI_COLOR_256. */
+#define ZETUI_COLOR_IS_256(c) (((zetui_u32)(c) >> 25) == 1u)
+
     /* ================================================================== */
     /*  Cell attributes                                                    */
     /* ================================================================== */
@@ -694,8 +710,9 @@ extern "C"
      * @brief Register a hyperlink URI and return its stable ID (1-based).
      *
      * IDs are deduplicated — registering the same URI twice returns the same
-     * ID.  The table never shrinks; the caller must keep @c uri alive for the
-     * context lifetime.  Returns 0 on failure (NULL uri or table full).
+     * ID.  The library copies @c uri internally; the caller does not need to
+     * keep it alive after this call.  Returns 0 on failure (NULL uri or
+     * out of memory).
      */
     int zetui_register_link (zetui_ctx_t *ctx, const char *uri);
 
@@ -708,6 +725,27 @@ extern "C"
      */
     void zetui_draw_link (zetui_ctx_t *ctx, int x, int y, const char *str,
                           const char *uri, zetui_style_t style);
+
+    /**
+     * @brief Return the hyperlink ID of the cell currently visible at (x, y).
+     *
+     * Reads the front buffer, which reflects the last @c zetui_present()
+     * call.  Returns 0 if no link is active at that cell or coordinates
+     * are out of bounds.  Useful for hit-testing mouse position against
+     * rendered hyperlinks.
+     */
+    int zetui_get_link_at (const zetui_ctx_t *ctx, int x, int y);
+
+    /**
+     * @brief Change the mouse pointer sprite using OSC 22.
+     *
+     * @c name is an X11 cursor name such as @c "pointer" (hand) or
+     * @c "default" (arrow).  Pass NULL or an empty string to reset.
+     * Honoured by kitty, foot, and other modern terminals; silently ignored
+     * by terminals that do not support OSC 22 (e.g. alacritty).
+     * @c zetui_shutdown() resets the pointer to the default automatically.
+     */
+    void zetui_set_pointer_shape (zetui_ctx_t *ctx, const char *name);
 
     /* ================================================================== */
     /*  IMPLEMENTATION                                                     */
@@ -927,8 +965,9 @@ extern "C"
         int paste_on;
 
         /* Hyperlink URI registry: IDs are 1-based; index 0 = ID 1 */
-        const char *link_uris[256];
+        char **link_uris;
         int link_count;
+        int link_cap;
 
         /* Hyperlink render state carried across present() */
         int ren_link;
@@ -1251,6 +1290,12 @@ extern "C"
                         zetui__obuf_append_int (ob, fg & 0xFF);
                         zetui__obuf_append (ob, "m", 1u);
                     }
+                else if (ZETUI_COLOR_IS_256 (fg))
+                    {
+                        zetui__obuf_append_str (ob, "\033[38;5;");
+                        zetui__obuf_append_int (ob, (int)((zetui_u32)(fg) & 0xFFu));
+                        zetui__obuf_append (ob, "m", 1u);
+                    }
                 else if (fg < 8)
                     {
                         zetui__obuf_append_str (ob, "\033[");
@@ -1280,6 +1325,12 @@ extern "C"
                         zetui__obuf_append_int (ob, (bg >> 8) & 0xFF);
                         zetui__obuf_append (ob, ";", 1u);
                         zetui__obuf_append_int (ob, bg & 0xFF);
+                        zetui__obuf_append (ob, "m", 1u);
+                    }
+                else if (ZETUI_COLOR_IS_256 (bg))
+                    {
+                        zetui__obuf_append_str (ob, "\033[48;5;");
+                        zetui__obuf_append_int (ob, (int)((zetui_u32)(bg) & 0xFFu));
                         zetui__obuf_append (ob, "m", 1u);
                     }
                 else if (bg < 8)
@@ -1710,8 +1761,8 @@ extern "C"
     {
         if (ctx->mouse_on)
             return;
-        /* button events + drag motion + SGR extended coordinates */
-        zetui__write_all (ctx->fd_out, "\033[?1000h\033[?1002h\033[?1006h",
+        /* button events + all-motion tracking + SGR extended coordinates */
+        zetui__write_all (ctx->fd_out, "\033[?1000h\033[?1003h\033[?1006h",
                           24u);
         ctx->mouse_on = 1;
     }
@@ -1721,7 +1772,7 @@ extern "C"
     {
         if (!ctx->mouse_on)
             return;
-        zetui__write_all (ctx->fd_out, "\033[?1006l\033[?1002l\033[?1000l",
+        zetui__write_all (ctx->fd_out, "\033[?1006l\033[?1003l\033[?1000l",
                           24u);
         ctx->mouse_on = 0;
     }
@@ -1765,16 +1816,23 @@ extern "C"
     void
     zetui_shutdown (zetui_ctx_t *ctx)
     {
+        int i;
         if (!ctx)
             return;
 
         zetui_paste_disable (ctx);
         zetui_focus_disable (ctx);
         zetui_mouse_disable (ctx);
+        /* reset mouse pointer shape */
+        zetui__write_all (ctx->fd_out, "\033]22;\033\\", 7u);
         sigaction (SIGWINCH, &ctx->old_winch, NULL);
         sigprocmask (SIG_SETMASK, &ctx->orig_mask, NULL);
         zetui__write_all (ctx->fd_out, "\033[?25h\033[?1049l", 14u);
         zetui__leave_raw (ctx->fd_in, &ctx->saved_termios);
+
+        for (i = 0; i < ctx->link_count; i++)
+            free (ctx->link_uris[i]);
+        free (ctx->link_uris);
 
         free (ctx->front);
         free (ctx->back);
@@ -2333,14 +2391,48 @@ extern "C"
     zetui_register_link (zetui_ctx_t *ctx, const char *uri)
     {
         int i;
-        if (!uri || !*uri || ctx->link_count >= 255)
+        char **tmp;
+        char *copy;
+        if (!uri || !*uri)
             return 0;
         for (i = 0; i < ctx->link_count; i++)
-            if (ctx->link_uris[i] == uri
-                || strcmp (ctx->link_uris[i], uri) == 0)
+            if (strcmp (ctx->link_uris[i], uri) == 0)
                 return i + 1;
-        ctx->link_uris[ctx->link_count] = uri;
+        if (ctx->link_count >= ctx->link_cap)
+            {
+                int newcap = ctx->link_cap ? ctx->link_cap * 2 : 8;
+                tmp = (char **)realloc (ctx->link_uris,
+                                        (size_t)newcap * sizeof (char *));
+                if (!tmp)
+                    return 0;
+                ctx->link_uris = tmp;
+                ctx->link_cap = newcap;
+            }
+        copy = (char *)malloc (strlen (uri) + 1u);
+        if (!copy)
+            return 0;
+        strcpy (copy, uri);
+        ctx->link_uris[ctx->link_count] = copy;
         return ++ctx->link_count;
+    }
+
+    int
+    zetui_get_link_at (const zetui_ctx_t *ctx, int x, int y)
+    {
+        if (!ctx || x < 0 || y < 0 || x >= ctx->width || y >= ctx->height)
+            return 0;
+        return ctx->front[y * ctx->width + x].link;
+    }
+
+    void
+    zetui_set_pointer_shape (zetui_ctx_t *ctx, const char *name)
+    {
+        if (!name || !*name)
+            name = "";
+        /* OSC 22 ; <name> ST */
+        zetui__write_all (ctx->fd_out, "\033]22;", 5u);
+        zetui__write_all (ctx->fd_out, name, strlen (name));
+        zetui__write_all (ctx->fd_out, "\033\\", 2u);
     }
 
     void
