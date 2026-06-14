@@ -128,6 +128,7 @@ panel_colors (zetui_ctx_t *ctx, int x, int y, int w, int h)
             "cyan   ", "white  ", "Bblack ", "Bred   ", "Bgreen ", "Byellow",
             "Bblue  ", "Bmagnt.", "Bcyan  ", "Bwhite " };
     zetui_style_t hdr, s;
+    const char *cap;
     int ci, r, c;
     int limit = y + h;
     int row = y;
@@ -218,6 +219,26 @@ panel_colors (zetui_ctx_t *ctx, int x, int y, int w, int h)
             zetui_draw_str (ctx, x, row, "zetui_style_default():", hdr);
             zetui_draw_str (ctx, x + 23, row, "terminal default fg/bg",
                             zetui_style_default ());
+            row++;
+        }
+
+    /* -- Detected color capability --------------------------------- */
+    if (row + 1 <= limit)
+        {
+            switch (zetui_color_support (ctx))
+                {
+                case ZETUI_COLOR_TRUECOLOR:
+                    cap = "truecolor (24-bit RGB)";
+                    break;
+                case ZETUI_COLOR_256:
+                    cap = "256-color";
+                    break;
+                default:
+                    cap = "16-color";
+                    break;
+                }
+            zetui_draw_str (ctx, x, row, "color support:", hdr);
+            zetui_draw_str (ctx, x + 15, row, cap, zetui_style_default ());
         }
 
     (void)w;

@@ -17,6 +17,12 @@ const c = @cImport({
 // Re-export C constants and enums with Zig naming                    //
 // ------------------------------------------------------------------ //
 
+pub const ColorSupport = enum(c_int) {
+    @"16"       = c.ZETUI_COLOR_16,
+    @"256"      = c.ZETUI_COLOR_256,
+    truecolor   = c.ZETUI_COLOR_TRUECOLOR,
+};
+
 pub const Color = enum(i32) {
     default = c.ZETUI_COLOR_DEFAULT,
     black = c.ZETUI_COLOR_BLACK,
@@ -366,6 +372,9 @@ pub const Context = struct {
     }
     pub fn height(self: *const Context) i32 {
         return c.zetui_height(self.raw);
+    }
+    pub fn colorSupport(self: *const Context) ColorSupport {
+        return @enumFromInt(c.zetui_color_support(self.raw));
     }
 
     /// Clear the back buffer.

@@ -56,6 +56,20 @@ extern "C"
     /* ================================================================== */
 
     /**
+     * @brief Detected color capability of the terminal.
+     *
+     * Retrieved with @c zetui_color_support() after @c zetui_init().
+     * Detection checks @c COLORTERM (for "truecolor" / "24bit") and then
+     * @c TERM (for "256color"); everything else falls back to 16-color.
+     */
+    typedef enum zetui_color_support
+    {
+        ZETUI_COLOR_16        = 0, /**< 16 ANSI colors only. */
+        ZETUI_COLOR_256       = 1, /**< 256-color xterm palette. */
+        ZETUI_COLOR_TRUECOLOR = 2  /**< 24-bit RGB (ZETUI_COLOR_RGB). */
+    } zetui_color_support_t;
+
+    /**
      * @brief ANSI terminal colors (16 named + default).
      *
      * Use @c ZETUI_COLOR_DEFAULT to leave the terminal's default color in
@@ -439,6 +453,16 @@ extern "C"
      * @return Row count; updated after each @c ZETUI_EVENT_RESIZE.
      */
     int zetui_height (const zetui_ctx_t *ctx);
+
+    /**
+     * @brief Terminal color capability detected at init time.
+     *
+     * Returns @c ZETUI_COLOR_TRUECOLOR, @c ZETUI_COLOR_256, or
+     * @c ZETUI_COLOR_16. Use this to decide whether to pass
+     * @c ZETUI_COLOR_RGB values or fall back to palette colors.
+     * @param ctx Initialised context.
+     */
+    zetui_color_support_t zetui_color_support (const zetui_ctx_t *ctx);
 
     /* --- Back-buffer drawing ------------------------------------------ */
 
@@ -881,6 +905,9 @@ extern "C"
 
         /* Whether bracketed paste mode is enabled */
         int paste_on;
+
+        /* Color capability detected at init */
+        zetui_color_support_t color_support;
 
         /* Set by SIGWINCH handler */
         int resize_pending;
@@ -1461,6 +1488,26 @@ extern "C"
     }
 
     /* ------------------------------------------------------------------ */
+    /*  Color capability detection                                        */
+    /* ------------------------------------------------------------------ */
+
+    static zetui_color_support_t
+    zetui__detect_color (void)
+    {
+        const char *v;
+
+        v = getenv ("COLORTERM");
+        if (v && (strcmp (v, "truecolor") == 0 || strcmp (v, "24bit") == 0))
+            return ZETUI_COLOR_TRUECOLOR;
+
+        v = getenv ("TERM");
+        if (v && strstr (v, "256color"))
+            return ZETUI_COLOR_256;
+
+        return ZETUI_COLOR_16;
+    }
+
+    /* ------------------------------------------------------------------ */
     /*  Terminal lifecycle                                                 */
     /* ------------------------------------------------------------------ */
 
@@ -1565,6 +1612,7 @@ extern "C"
         ctx->cursor_x = 0;
         ctx->cursor_y = 0;
         ctx->term_cursor_on = 0; /* hidden by the init escape below */
+        ctx->color_support = zetui__detect_color ();
 
         {
             struct sigaction sa;
@@ -1684,6 +1732,11 @@ extern "C"
     zetui_height (const zetui_ctx_t *ctx)
     {
         return ctx->height;
+    }
+    zetui_color_support_t
+    zetui_color_support (const zetui_ctx_t *ctx)
+    {
+        return ctx->color_support;
     }
 
     /* ------------------------------------------------------------------ */

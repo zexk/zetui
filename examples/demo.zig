@@ -97,6 +97,18 @@ fn panelColors(tui: *zetui.Context, x: i32, y: i32, w: i32, h: i32) void {
     if (row + 1 <= limit) {
         tui.drawStr(x, row, "zetui_style_default():", hdr);
         tui.drawStr(x + 23, row, "terminal default fg/bg", .{});
+        row += 1;
+    }
+
+    // Detected color capability
+    if (row + 1 <= limit) {
+        const cap: [:0]const u8 = switch (tui.colorSupport()) {
+            .truecolor => "truecolor (24-bit RGB)",
+            .@"256" => "256-color",
+            .@"16" => "16-color",
+        };
+        tui.drawStr(x, row, "color support:", hdr);
+        tui.drawStr(x + 15, row, cap, .{});
     }
 }
 
