@@ -1050,7 +1050,7 @@ extern "C"
     /*  Internal: input buffer                                             */
     /* ------------------------------------------------------------------ */
 
-#define ZETUI__IBUF 64
+#define ZETUI__IBUF 4096
 
     typedef struct
     {
