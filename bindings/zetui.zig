@@ -563,6 +563,13 @@ pub const Context = struct {
         c.zetui_draw_str(self.raw, x, y, s.ptr, style.toC());
     }
 
+    /// Draw a Zig-formatted string clipped to max_cols terminal columns.
+    pub fn drawFmtLen(self: *Context, x: i32, y: i32, max_cols: i32, style: Style, comptime fmt: []const u8, args: anytype) i32 {
+        var buf: [4096]u8 = undefined;
+        const s = std.fmt.bufPrintZ(&buf, fmt, args) catch buf[0 .. buf.len - 1 :0];
+        return c.zetui_draw_str_len(self.raw, x, y, s.ptr, max_cols, style.toC());
+    }
+
     /// Draw a Zig slice (copies to a stack buffer with null terminator).
     pub fn drawSlice(self: *Context, x: i32, y: i32, str: []const u8, style: Style) void {
         var buf: [4096]u8 = undefined;

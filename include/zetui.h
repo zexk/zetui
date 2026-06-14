@@ -698,6 +698,23 @@ extern "C"
                             zetui_style_t style, const char *fmt, ...);
 
     /**
+     * @brief Draw a formatted string, clipped to @p max_cols terminal columns.
+     *
+     * Formats into a 4096-byte internal buffer then calls
+     * @c zetui_draw_str_len.  Wide characters that would exceed the budget are
+     * skipped entirely.
+     * @param ctx      Initialised context.
+     * @param x        Starting column.
+     * @param y        Row.
+     * @param max_cols Maximum number of terminal columns to consume.
+     * @param style    Visual style applied to every cell.
+     * @param fmt      printf-compatible format string.
+     * @return         Number of terminal columns actually written.
+     */
+    int zetui_draw_printf_len (zetui_ctx_t *ctx, int x, int y, int max_cols,
+                               zetui_style_t style, const char *fmt, ...);
+
+    /**
      * @brief Draw a box-drawing rectangle.
      * @param ctx      Initialised context.
      * @param x        Left column.
@@ -2792,6 +2809,18 @@ extern "C"
         vsnprintf (buf, sizeof (buf), fmt, ap);
         va_end (ap);
         zetui_draw_str (ctx, x, y, buf, style);
+    }
+
+    int
+    zetui_draw_printf_len (zetui_ctx_t *ctx, int x, int y, int max_cols,
+                           zetui_style_t style, const char *fmt, ...)
+    {
+        char buf[4096];
+        va_list ap;
+        va_start (ap, fmt);
+        vsnprintf (buf, sizeof (buf), fmt, ap);
+        va_end (ap);
+        return zetui_draw_str_len (ctx, x, y, buf, max_cols, style);
     }
 
     void

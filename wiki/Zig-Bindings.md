@@ -109,6 +109,7 @@ tui.drawStr(1, 2, "palette orange", xterm_orange);
 | `ctx.drawStr(x, y, str, style)` | `zetui_draw_str()` |
 | `ctx.drawStrLen(x, y, str, max_cols, style) i32` | `zetui_draw_str_len()` |
 | `ctx.drawFmt(x, y, style, fmt, args)` | `zetui_draw_printf()` (Zig fmt syntax) |
+| `ctx.drawFmtLen(x, y, max_cols, style, fmt, args) i32` | `zetui_draw_printf_len()` (Zig fmt syntax) |
 | `ctx.drawSlice(x, y, slice, style)` | `zetui_draw_str()` (copies to stack buf) |
 | `ctx.drawBox(x, y, w, h, variant, style)` | `zetui_draw_box()` |
 | `ctx.fillRect(x, y, w, h, cell)` | `zetui_fill_rect()` |

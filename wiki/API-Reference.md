@@ -420,6 +420,13 @@ void zetui_draw_printf(zetui_ctx_t *ctx, int x, int y,
 ```
 Format a string with `printf`-style arguments and draw it at `(x, y)`. Internally formats into a 4096-byte stack buffer; output is silently truncated if longer.
 
+#### `zetui_draw_printf_len`
+```c
+int zetui_draw_printf_len(zetui_ctx_t *ctx, int x, int y, int max_cols,
+                          zetui_style_t style, const char *fmt, ...);
+```
+Like `zetui_draw_printf` but clipped to `max_cols` terminal columns. Wide characters that would exceed the budget are skipped entirely. Returns the number of terminal columns actually written. Internally formats into a 4096-byte stack buffer; output is silently truncated if longer.
+
 #### `zetui_draw_box`
 ```c
 void zetui_draw_box(zetui_ctx_t *ctx, int x, int y, int w, int h,
