@@ -73,6 +73,17 @@ s.bg = ZETUI_COLOR_DEFAULT;
 
 Test with `ZETUI_COLOR_IS_RGB(c)` (non-zero if created by `ZETUI_COLOR_RGB`).
 
+### `ZETUI_COLOR_256(n)`
+
+Encode a 256-color xterm palette index (0–255) into a `zetui_i32 fg/bg` field. Emits `\033[38;5;Nm` / `\033[48;5;Nm`. Check first with `zetui_color_support()` returning `ZETUI_COLOR_256` or higher.
+
+```c
+zetui_style_t s;
+s.fg = ZETUI_COLOR_256(202);  // xterm orange
+```
+
+Test with `ZETUI_COLOR_IS_256(c)`.
+
 ---
 
 ## Cell attributes
@@ -127,7 +138,7 @@ Zero-initialize for terminal defaults with no attributes.
 
 `zetui_key_event_t.key` is `ZETUI_KEY_NONE` for printable characters; check `.ch` (Unicode codepoint) instead.
 
-Special keys: `ZETUI_KEY_CTRL_A`…`ZETUI_KEY_CTRL_Z`, `ZETUI_KEY_BACKSPACE` (8), `ZETUI_KEY_TAB` (9), `ZETUI_KEY_ENTER` (13), `ZETUI_KEY_ESC` (27), `ZETUI_KEY_DEL` (127), arrow keys, Home, End, Page Up/Down, Insert, Delete, F1–F12.
+Special keys: `ZETUI_KEY_CTRL_A`…`ZETUI_KEY_CTRL_Z`, `ZETUI_KEY_BACKSPACE` (8), `ZETUI_KEY_TAB` (9), `ZETUI_KEY_ENTER` (13), `ZETUI_KEY_ESC` (27), `ZETUI_KEY_DEL` (127), arrow keys, Home, End, Page Up/Down, Insert, Delete, F1–F12, `ZETUI_KEY_SHIFT_TAB` (278, `ESC [ Z`).
 
 ## Key modifiers
 
@@ -292,6 +303,12 @@ void zetui_clear(zetui_ctx_t *ctx);
 ```
 Fill the back buffer with blank cells (terminal default style).
 
+#### `zetui_invalidate`
+```c
+void zetui_invalidate(zetui_ctx_t *ctx);
+```
+Blank the front buffer so the next `zetui_present()` redraws every cell unconditionally. Use after SIGTSTP/SIGCONT or any event that may have corrupted the visible terminal state.
+
 #### `zetui_set_cell`
 ```c
 void zetui_set_cell(zetui_ctx_t *ctx, int x, int y, zetui_cell_t cell);
@@ -331,7 +348,7 @@ Blocking wait. `timeout_ms = -1` blocks indefinitely. Returns `type == ZETUI_EVE
 void zetui_mouse_enable(zetui_ctx_t *ctx);
 void zetui_mouse_disable(zetui_ctx_t *ctx);
 ```
-Enable/disable SGR mouse reporting (button presses, releases, wheel, drag). Off by default because mouse reporting takes over the terminal's native text selection. Automatically disabled by `zetui_shutdown()`.
+Enable/disable SGR mouse reporting (button presses, releases, wheel, and all cursor motion including hover). Off by default because mouse reporting takes over the terminal's native text selection. Automatically disabled by `zetui_shutdown()`.
 
 #### `zetui_focus_enable` / `zetui_focus_disable`
 ```c
@@ -375,6 +392,21 @@ void zetui_draw_str(zetui_ctx_t *ctx, int x, int y,
                     const char *str, zetui_style_t style);
 ```
 Draw a NUL-terminated UTF-8 string starting at `(x, y)`. The cursor advances by `zetui_char_width()` per codepoint; zero-width codepoints are skipped.
+
+#### `zetui_draw_str_len`
+```c
+int zetui_draw_str_len(zetui_ctx_t *ctx, int x, int y,
+                       const char *str, int max_cols,
+                       zetui_style_t style);
+```
+Like `zetui_draw_str` but stops after `max_cols` display columns. Wide characters that would straddle the limit are not drawn. Pass `max_cols < 0` for unlimited (equivalent to `zetui_draw_str`). Returns the number of display columns written.
+
+#### `zetui_draw_printf`
+```c
+void zetui_draw_printf(zetui_ctx_t *ctx, int x, int y,
+                       zetui_style_t style, const char *fmt, ...);
+```
+Format a string with `printf`-style arguments and draw it at `(x, y)`. Internally formats into a 4096-byte stack buffer; output is silently truncated if longer.
 
 #### `zetui_draw_box`
 ```c
@@ -421,6 +453,22 @@ void zetui_cursor_move(zetui_ctx_t *ctx, int x, int y);
 ```
 Move the hardware cursor to column `x`, row `y` (both 0-based).
 
+#### `zetui_cursor_set_shape`
+```c
+typedef enum zetui_cursor_shape {
+    ZETUI_CURSOR_DEFAULT          = 0,
+    ZETUI_CURSOR_BLOCK_BLINK      = 1,
+    ZETUI_CURSOR_BLOCK_STEADY     = 2,
+    ZETUI_CURSOR_UNDERLINE_BLINK  = 3,
+    ZETUI_CURSOR_UNDERLINE_STEADY = 4,
+    ZETUI_CURSOR_BEAM_BLINK       = 5,
+    ZETUI_CURSOR_BEAM_STEADY      = 6,
+} zetui_cursor_shape_t;
+
+void zetui_cursor_set_shape(zetui_ctx_t *ctx, zetui_cursor_shape_t shape);
+```
+Set the hardware cursor shape via DECSCUSR (`CSI Ps SP q`). Takes effect immediately. `zetui_shutdown()` resets to `ZETUI_CURSOR_DEFAULT` automatically. Supported by most modern terminals (xterm, kitty, foot, alacritty).
+
 ---
 
 ### Terminal window
@@ -431,11 +479,29 @@ void zetui_set_title(zetui_ctx_t *ctx, const char *title);
 ```
 Set the terminal window title via OSC 2. The string must be NUL-terminated and must not contain control bytes. Accepted by most modern terminal emulators.
 
+#### `zetui_set_clipboard`
+```c
+void zetui_set_clipboard(zetui_ctx_t *ctx, const char *str);
+```
+Copy a NUL-terminated UTF-8 string to the system clipboard via OSC 52. Internally base64-encodes `str` and emits `OSC 52 ; c ; <b64> ST`. Supported by most modern terminals (alacritty, kitty, xterm, foot); may be blocked in multiplexers without pass-through configured. Passing `NULL` or an empty string clears the clipboard selection.
+
+#### `zetui_set_pointer_shape`
+```c
+void zetui_set_pointer_shape(zetui_ctx_t *ctx, const char *name);
+```
+Change the mouse pointer sprite via OSC 22. `name` is an X11 cursor name such as `"pointer"` (hand) or `"default"` (arrow). Honoured by kitty, foot, and other modern terminals; silently ignored by terminals that do not support OSC 22. `zetui_shutdown()` resets the pointer automatically.
+
 #### `zetui_register_link`
 ```c
 int zetui_register_link(zetui_ctx_t *ctx, const char *uri);
 ```
-Register a hyperlink URI and return a stable ID (1-based). Registering the same URI twice returns the same ID. Returns 0 on failure (NULL uri or table full — max 256 links). The caller must keep `uri` alive for the context lifetime.
+Register a hyperlink URI and return a stable ID (1-based). Registering the same URI twice returns the same ID. The library copies `uri` internally — the caller does not need to keep it alive after this call. Returns 0 on failure (`NULL` uri or out of memory). The URI table grows dynamically with no hard cap.
+
+#### `zetui_get_link_at`
+```c
+int zetui_get_link_at(const zetui_ctx_t *ctx, int x, int y);
+```
+Return the hyperlink ID of the cell currently visible at `(x, y)` by reading the front buffer. Returns 0 if no link is active at that cell or if the coordinates are out of bounds. Use this to hit-test mouse position against rendered hyperlinks.
 
 #### `zetui_draw_link`
 ```c
