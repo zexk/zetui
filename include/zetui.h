@@ -250,7 +250,8 @@ extern "C"
         ZETUI_EVENT_KEY = 1,    /**< Keyboard event; see @c data.key. */
         ZETUI_EVENT_RESIZE = 2, /**< Terminal was resized; see @c data.resize. */
         ZETUI_EVENT_MOUSE = 3,  /**< Mouse event; see @c data.mouse. */
-        ZETUI_EVENT_FOCUS = 4   /**< Focus gained/lost; see @c data.focus. */
+        ZETUI_EVENT_FOCUS = 4,  /**< Focus gained/lost; see @c data.focus. */
+        ZETUI_EVENT_PASTE = 5   /**< Bracketed paste boundary; see @c data.paste. */
     } zetui_event_type_t;
 
     /** @brief Keyboard event payload. */
@@ -303,6 +304,19 @@ extern "C"
         int focused; /**< Non-zero when the terminal window gained focus. */
     } zetui_focus_event_t;
 
+    /**
+     * @brief Bracketed paste boundary payload (requires zetui_paste_enable()).
+     *
+     * When @c begin is non-zero the terminal is starting a paste; when zero
+     * it has finished. Key events received between the two boundaries carry
+     * pasted text rather than direct keystrokes and should typically bypass
+     * keybinding processing.
+     */
+    typedef struct zetui_paste_event
+    {
+        int begin; /**< Non-zero for paste-start (@c CSI 200~), zero for paste-end. */
+    } zetui_paste_event_t;
+
     /** @brief Union of all event payloads. */
     typedef union zetui_event_data
     {
@@ -310,6 +324,7 @@ extern "C"
         zetui_resize_event_t resize; /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_RESIZE. */
         zetui_mouse_event_t  mouse;  /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_MOUSE. */
         zetui_focus_event_t  focus;  /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_FOCUS. */
+        zetui_paste_event_t  paste;  /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_PASTE. */
     } zetui_event_data_t;
 
     /**
@@ -517,6 +532,22 @@ extern "C"
      * @param ctx Initialised context.
      */
     void zetui_focus_disable (zetui_ctx_t *ctx);
+
+    /**
+     * @brief Enable bracketed paste mode.
+     *
+     * The terminal wraps paste operations with @c ZETUI_EVENT_PASTE events
+     * (begin=1 / begin=0). Key events between them carry pasted text.
+     * Off by default. Automatically disabled by zetui_shutdown().
+     * @param ctx Initialised context.
+     */
+    void zetui_paste_enable (zetui_ctx_t *ctx);
+
+    /**
+     * @brief Disable bracketed paste mode.
+     * @param ctx Initialised context.
+     */
+    void zetui_paste_disable (zetui_ctx_t *ctx);
 
     /* --- Drawing helpers ---------------------------------------------- */
 
@@ -835,6 +866,9 @@ extern "C"
 
         /* Whether focus-change reporting is enabled */
         int focus_on;
+
+        /* Whether bracketed paste mode is enabled */
+        int paste_on;
 
         /* Set by SIGWINCH handler */
         int resize_pending;
@@ -1592,11 +1626,30 @@ extern "C"
     }
 
     void
+    zetui_paste_enable (zetui_ctx_t *ctx)
+    {
+        if (ctx->paste_on)
+            return;
+        zetui__write_all (ctx->fd_out, "\033[?2004h", 8u);
+        ctx->paste_on = 1;
+    }
+
+    void
+    zetui_paste_disable (zetui_ctx_t *ctx)
+    {
+        if (!ctx->paste_on)
+            return;
+        zetui__write_all (ctx->fd_out, "\033[?2004l", 8u);
+        ctx->paste_on = 0;
+    }
+
+    void
     zetui_shutdown (zetui_ctx_t *ctx)
     {
         if (!ctx)
             return;
 
+        zetui_paste_disable (ctx);
         zetui_focus_disable (ctx);
         zetui_mouse_disable (ctx);
         sigaction (SIGWINCH, &ctx->old_winch, NULL);
@@ -1953,6 +2006,23 @@ extern "C"
                                 ev.data.focus.focused
                                     = (buf[2] == (unsigned char)'I') ? 1 : 0;
                                 ib->pos += 3;
+                                return ev;
+                            }
+                    }
+
+                /* Bracketed paste: CSI 200~ (begin) and CSI 201~ (end) */
+                if (rem >= 6 && buf[1] == (unsigned char)'['
+                    && buf[2] == (unsigned char)'2'
+                    && buf[3] == (unsigned char)'0'
+                    && buf[5] == (unsigned char)'~')
+                    {
+                        if (buf[4] == (unsigned char)'0'
+                            || buf[4] == (unsigned char)'1')
+                            {
+                                ev.type = ZETUI_EVENT_PASTE;
+                                ev.data.paste.begin
+                                    = (buf[4] == (unsigned char)'0') ? 1 : 0;
+                                ib->pos += 6;
                                 return ev;
                             }
                     }

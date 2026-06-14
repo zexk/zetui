@@ -739,6 +739,15 @@ panel_input (zetui_ctx_t *ctx, int x, int y, int w, int h, zetui_event_t *last,
             zetui_draw_str (ctx, x + 14, row,
                             last->data.focus.focused ? "yes" : "no", val);
         }
+    else if (last->type == ZETUI_EVENT_PASTE)
+        {
+            zetui_draw_str (ctx, x, row, "event type  :", lbl);
+            zetui_draw_str (ctx, x + 14, row, "PASTE", val);
+            row++;
+            zetui_draw_str (ctx, x, row, "boundary    :", lbl);
+            zetui_draw_str (ctx, x + 14, row,
+                            last->data.paste.begin ? "begin" : "end", val);
+        }
 
     /* Event counter at the bottom */
     pos = 0;
@@ -1097,6 +1106,7 @@ main (void)
     zetui_cursor_hide (ctx); /* hide cursor during normal navigation */
     zetui_mouse_enable (ctx);  /* SGR mouse: shown on the Input panel */
     zetui_focus_enable (ctx);  /* focus events: shown on the Input panel */
+    zetui_paste_enable (ctx);  /* bracketed paste: shown on the Input panel */
 
     sel = 0;
     running = 1;

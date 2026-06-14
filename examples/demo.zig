@@ -368,6 +368,14 @@ fn panelInput(
             tui.drawStr(x, row, "focused     :", lbl);
             tui.drawStr(x + 14, row, if (fe.focused) "yes" else "no", val);
         },
+
+        .paste => |pe| {
+            tui.drawStr(x, row, "event type  :", lbl);
+            tui.drawStr(x + 14, row, "PASTE", val);
+            row += 1;
+            tui.drawStr(x, row, "boundary    :", lbl);
+            tui.drawStr(x + 14, row, if (pe.begin) "begin" else "end", val);
+        },
     }
 
     // Total event counter
@@ -591,7 +599,8 @@ pub fn main() !void {
 
     tui.cursorHide();
     tui.mouseEnable();  // SGR mouse: shown on the Input panel
-    tui.focusEnable(); // focus events: shown on the Input panel
+    tui.focusEnable();  // focus events: shown on the Input panel
+    tui.pasteEnable();  // bracketed paste: shown on the Input panel
 
     var sel: usize = 0;
     var total: i32 = 0;

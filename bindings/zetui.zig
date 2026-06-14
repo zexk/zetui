@@ -252,12 +252,17 @@ pub const FocusEvent = struct {
     focused: bool,
 };
 
+pub const PasteEvent = struct {
+    begin: bool,
+};
+
 pub const Event = union(enum) {
     none,
     key: KeyEvent,
     resize: ResizeEvent,
     mouse: MouseEvent,
     focus: FocusEvent,
+    paste: PasteEvent,
 
     fn fromC(ev: c.zetui_event_t) Event {
         switch (ev.type) {
@@ -288,6 +293,9 @@ pub const Event = union(enum) {
             },
             c.ZETUI_EVENT_FOCUS => {
                 return .{ .focus = .{ .focused = ev.data.focus.focused != 0 } };
+            },
+            c.ZETUI_EVENT_PASTE => {
+                return .{ .paste = .{ .begin = ev.data.paste.begin != 0 } };
             },
             else => return .none,
         }
@@ -421,6 +429,16 @@ pub const Context = struct {
     /// Disable focus-change reporting.
     pub fn focusDisable(self: *Context) void {
         c.zetui_focus_disable(self.raw);
+    }
+
+    /// Enable bracketed paste mode (ZETUI_EVENT_PASTE events).
+    pub fn pasteEnable(self: *Context) void {
+        c.zetui_paste_enable(self.raw);
+    }
+
+    /// Disable bracketed paste mode.
+    pub fn pasteDisable(self: *Context) void {
+        c.zetui_paste_disable(self.raw);
     }
 
     /// Draw a null-terminated UTF-8 string.
