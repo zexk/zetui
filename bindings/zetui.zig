@@ -526,6 +526,13 @@ pub const Context = struct {
         return c.zetui_draw_str_len(self.raw, x, y, str, max_cols, style.toC());
     }
 
+    /// Draw a Zig-formatted string (std.fmt); output truncated at 4096 bytes.
+    pub fn drawFmt(self: *Context, x: i32, y: i32, style: Style, comptime fmt: []const u8, args: anytype) void {
+        var buf: [4096]u8 = undefined;
+        const s = std.fmt.bufPrintZ(&buf, fmt, args) catch buf[0 .. buf.len - 1 :0];
+        c.zetui_draw_str(self.raw, x, y, s.ptr, style.toC());
+    }
+
     /// Draw a Zig slice (copies to a stack buffer with null terminator).
     pub fn drawSlice(self: *Context, x: i32, y: i32, str: []const u8, style: Style) void {
         var buf: [4096]u8 = undefined;

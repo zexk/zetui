@@ -658,6 +658,20 @@ extern "C"
                             int max_cols, zetui_style_t style);
 
     /**
+     * @brief Draw a formatted string at (x, y) using printf-style formatting.
+     *
+     * Formats into a 4096-byte internal buffer (output silently truncated if
+     * longer) then calls @c zetui_draw_str.
+     * @param ctx   Initialised context.
+     * @param x     Starting column.
+     * @param y     Row.
+     * @param style Visual style applied to every cell.
+     * @param fmt   printf-compatible format string.
+     */
+    void zetui_draw_printf (zetui_ctx_t *ctx, int x, int y,
+                            zetui_style_t style, const char *fmt, ...);
+
+    /**
      * @brief Draw a box-drawing rectangle.
      * @param ctx      Initialised context.
      * @param x        Left column.
@@ -815,6 +829,8 @@ extern "C"
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -2628,6 +2644,18 @@ extern "C"
                 cols_left -= cw;
             }
         return cx - x;
+    }
+
+    void
+    zetui_draw_printf (zetui_ctx_t *ctx, int x, int y, zetui_style_t style,
+                       const char *fmt, ...)
+    {
+        char buf[4096]; /* truncation is silent — callers must size strings */
+        va_list ap;
+        va_start (ap, fmt);
+        vsnprintf (buf, sizeof (buf), fmt, ap);
+        va_end (ap);
+        zetui_draw_str (ctx, x, y, buf, style);
     }
 
     void
