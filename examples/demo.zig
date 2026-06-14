@@ -16,38 +16,6 @@ const panel_titles = [NUM_PANELS][:0]const u8{
 };
 
 // ================================================================== //
-// Helper: draw a box with an arbitrary box variant                   //
-// (zetui.Context.drawBox always uses the light set)                  //
-// ================================================================== //
-
-fn drawBoxTable(
-    tui: *zetui.Context,
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-    variant: zetui.BoxVariant,
-    style: zetui.Style,
-) void {
-    if (w < 2 or h < 2) return;
-    const S = zetui.Box;
-    tui.setCell(x, y, .{ .ch = zetui.boxCp(variant, S.tl), .style = style });
-    tui.setCell(x + w - 1, y, .{ .ch = zetui.boxCp(variant, S.tr), .style = style });
-    tui.setCell(x, y + h - 1, .{ .ch = zetui.boxCp(variant, S.bl), .style = style });
-    tui.setCell(x + w - 1, y + h - 1, .{ .ch = zetui.boxCp(variant, S.br), .style = style });
-    var i: i32 = 1;
-    while (i < w - 1) : (i += 1) {
-        tui.setCell(x + i, y, .{ .ch = zetui.boxCp(variant, S.h), .style = style });
-        tui.setCell(x + i, y + h - 1, .{ .ch = zetui.boxCp(variant, S.h), .style = style });
-    }
-    i = 1;
-    while (i < h - 1) : (i += 1) {
-        tui.setCell(x, y + i, .{ .ch = zetui.boxCp(variant, S.v), .style = style });
-        tui.setCell(x + w - 1, y + i, .{ .ch = zetui.boxCp(variant, S.v), .style = style });
-    }
-}
-
-// ================================================================== //
 // Panel 1: Colors                                                     //
 // ================================================================== //
 
@@ -177,13 +145,13 @@ fn panelBoxes(tui: *zetui.Context, x: i32, y: i32, w: i32, h: i32) void {
     const plain: zetui.Style = .{};
     const accent: zetui.Style = .{ .fg = .cyan, .attrs = zetui.Attr.bold };
 
-    tui.drawStr(x, y, "zetui_box_light / heavy / double  via drawBoxTable():", hdr);
+    tui.drawStr(x, y, "drawBox: light / heavy / double styles:", hdr);
 
     const bw = @divTrunc(w - 2, 3) - 1;
     const bh: i32 = 7;
 
-    // Light -- uses tui.drawBox (the built-in light wrapper)
-    tui.drawBox(x, y + 1, bw, bh, plain);
+    // Light
+    tui.drawBox(x, y + 1, bw, bh, .light, plain);
     tui.drawStr(x + 2, y + 2, "light", accent);
     tui.setCell(x, y + 4, .{ .ch = zetui.boxCp(.light, zetui.Box.lt), .style = plain });
     tui.drawHline(x + 1, y + 4, bw - 2, zetui.boxCp(.light, zetui.Box.h), plain);
@@ -191,7 +159,7 @@ fn panelBoxes(tui: *zetui.Context, x: i32, y: i32, w: i32, h: i32) void {
 
     // Heavy
     const bx_heavy = x + bw + 1;
-    drawBoxTable(tui, bx_heavy, y + 1, bw, bh, .heavy, plain);
+    tui.drawBox(bx_heavy, y + 1, bw, bh, .heavy, plain);
     tui.drawStr(bx_heavy + 2, y + 2, "heavy", accent);
     tui.setCell(bx_heavy, y + 4, .{ .ch = zetui.boxCp(.heavy, zetui.Box.lt), .style = plain });
     tui.drawHline(bx_heavy + 1, y + 4, bw - 2, zetui.boxCp(.heavy, zetui.Box.h), plain);
@@ -199,7 +167,7 @@ fn panelBoxes(tui: *zetui.Context, x: i32, y: i32, w: i32, h: i32) void {
 
     // Double
     const bx_double = x + (bw + 1) * 2;
-    drawBoxTable(tui, bx_double, y + 1, bw, bh, .double, plain);
+    tui.drawBox(bx_double, y + 1, bw, bh, .double, plain);
     tui.drawStr(bx_double + 2, y + 2, "double", accent);
     tui.setCell(bx_double, y + 4, .{ .ch = zetui.boxCp(.double, zetui.Box.lt), .style = plain });
     tui.drawHline(bx_double + 1, y + 4, bw - 2, zetui.boxCp(.double, zetui.Box.h), plain);
@@ -351,6 +319,37 @@ fn panelInput(
                 // Park cursor on the glyph -- demonstrates cursorMove
                 tui.cursorMove(x + 10, row);
             }
+        },
+
+        .mouse => |me| {
+            tui.drawStr(x, row, "event type  :", lbl);
+            tui.drawStr(x + 14, row, "MOUSE", val);
+            row += 1;
+            tui.drawStr(x, row, "action      :", lbl);
+            tui.drawSlice(x + 14, row, switch (me.action) {
+                .press => "press",
+                .release => "release",
+                .motion => "motion (drag)",
+                .wheel_up => "wheel up",
+                .wheel_down => "wheel down",
+            }, val);
+            row += 1;
+            tui.drawStr(x, row, "button      :", lbl);
+            tui.drawSlice(x + 14, row, switch (me.button) {
+                .none => "none",
+                .left => "left",
+                .middle => "middle",
+                .right => "right",
+            }, val);
+            row += 1;
+            const pos_s = std.fmt.bufPrint(&buf, "{d},{d}", .{ me.x, me.y }) catch "?";
+            tui.drawStr(x, row, "position    :", lbl);
+            tui.drawSlice(x + 14, row, pos_s, val);
+            row += 1;
+            const mod_str: []const u8 =
+                if (me.mods & zetui.Mod.ctrl != 0) "CTRL" else if (me.mods & zetui.Mod.alt != 0) "ALT" else if (me.mods & zetui.Mod.shift != 0) "SHIFT" else "none";
+            tui.drawStr(x, row, "modifiers   :", lbl);
+            tui.drawSlice(x + 14, row, mod_str, val);
         },
 
         .resize => |re| {
@@ -526,7 +525,7 @@ fn drawChrome(tui: *zetui.Context, sel: usize, total: i32) void {
     const dim: zetui.Style = .{ .fg = .bright_black };
 
     // Outer heavy box
-    drawBoxTable(tui, 0, 0, w, h, .heavy, frame);
+    tui.drawBox(0, 0, w, h, .heavy, frame);
 
     // Title bar
     tui.fillRect(1, 1, w - 2, 1, .{ .style = title_bg });
@@ -583,6 +582,7 @@ pub fn main() !void {
     defer tui.deinit();
 
     tui.cursorHide();
+    tui.mouseEnable(); // SGR mouse: shown on the Input panel
 
     var sel: usize = 0;
     var total: i32 = 0;

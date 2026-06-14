@@ -42,7 +42,7 @@ main (void)
             zetui_clear (ctx);
 
             /* Outer border */
-            zetui_draw_box (ctx, 0, 0, w, h, normal);
+            zetui_draw_box (ctx, 0, 0, w, h, ZETUI_BOX_STYLE_LIGHT, normal);
 
             /* Title bar */
             {

@@ -148,7 +148,11 @@ pub const Box = struct {
     pub const x: usize = c.ZETUI_BOX_X;
 };
 
-pub const BoxVariant = enum { light, heavy, double };
+pub const BoxVariant = enum(c_uint) {
+    light  = c.ZETUI_BOX_STYLE_LIGHT,
+    heavy  = c.ZETUI_BOX_STYLE_HEAVY,
+    double = c.ZETUI_BOX_STYLE_DOUBLE,
+};
 
 /// Return the Unicode codepoint at `idx` from the chosen box table.
 pub fn boxCp(variant: BoxVariant, idx: usize) u21 {
@@ -221,10 +225,34 @@ pub const ResizeEvent = struct {
     height: i32,
 };
 
+pub const MouseAction = enum(c_int) {
+    press = c.ZETUI_MOUSE_PRESS,
+    release = c.ZETUI_MOUSE_RELEASE,
+    motion = c.ZETUI_MOUSE_MOTION,
+    wheel_up = c.ZETUI_MOUSE_WHEEL_UP,
+    wheel_down = c.ZETUI_MOUSE_WHEEL_DOWN,
+};
+
+pub const MouseButton = enum(c_int) {
+    none = c.ZETUI_MOUSE_BUTTON_NONE,
+    left = c.ZETUI_MOUSE_BUTTON_LEFT,
+    middle = c.ZETUI_MOUSE_BUTTON_MIDDLE,
+    right = c.ZETUI_MOUSE_BUTTON_RIGHT,
+};
+
+pub const MouseEvent = struct {
+    action: MouseAction,
+    button: MouseButton,
+    x: i32,
+    y: i32,
+    mods: u32,
+};
+
 pub const Event = union(enum) {
     none,
     key: KeyEvent,
     resize: ResizeEvent,
+    mouse: MouseEvent,
 
     fn fromC(ev: c.zetui_event_t) Event {
         switch (ev.type) {
@@ -241,6 +269,16 @@ pub const Event = union(enum) {
                 return .{ .resize = .{
                     .width = re.width,
                     .height = re.height,
+                } };
+            },
+            c.ZETUI_EVENT_MOUSE => {
+                const me = ev.data.mouse;
+                return .{ .mouse = .{
+                    .action = @enumFromInt(me.action),
+                    .button = @enumFromInt(me.button),
+                    .x = me.x,
+                    .y = me.y,
+                    .mods = me.mods,
                 } };
             },
             else => return .none,
@@ -356,6 +394,17 @@ pub const Context = struct {
         return Event.fromC(c.zetui_wait_event(self.raw, timeout_ms));
     }
 
+    /// Enable SGR mouse reporting (delivers Event.mouse). Off by default;
+    /// note it takes over the terminal's native text selection.
+    pub fn mouseEnable(self: *Context) void {
+        c.zetui_mouse_enable(self.raw);
+    }
+
+    /// Disable mouse reporting.
+    pub fn mouseDisable(self: *Context) void {
+        c.zetui_mouse_disable(self.raw);
+    }
+
     /// Draw a null-terminated UTF-8 string.
     pub fn drawStr(self: *Context, x: i32, y: i32, str: [*:0]const u8, style: Style) void {
         c.zetui_draw_str(self.raw, x, y, str, style.toC());
@@ -370,9 +419,9 @@ pub const Context = struct {
         c.zetui_draw_str(self.raw, x, y, &buf, style.toC());
     }
 
-    /// Draw a box border using light box-drawing characters.
-    pub fn drawBox(self: *Context, x: i32, y: i32, w: i32, h: i32, style: Style) void {
-        c.zetui_draw_box(self.raw, x, y, w, h, style.toC());
+    /// Draw a box border using the given box-drawing character set.
+    pub fn drawBox(self: *Context, x: i32, y: i32, w: i32, h: i32, box: BoxVariant, style: Style) void {
+        c.zetui_draw_box(self.raw, x, y, w, h, @intFromEnum(box), style.toC());
     }
 
     /// Fill a rectangle with a single cell.

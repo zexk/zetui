@@ -248,7 +248,8 @@ extern "C"
     {
         ZETUI_EVENT_NONE = 0,   /**< No event (poll returned immediately). */
         ZETUI_EVENT_KEY = 1,    /**< Keyboard event; see @c data.key. */
-        ZETUI_EVENT_RESIZE = 2  /**< Terminal was resized; see @c data.resize. */
+        ZETUI_EVENT_RESIZE = 2, /**< Terminal was resized; see @c data.resize. */
+        ZETUI_EVENT_MOUSE = 3   /**< Mouse event; see @c data.mouse. */
     } zetui_event_type_t;
 
     /** @brief Keyboard event payload. */
@@ -266,15 +267,45 @@ extern "C"
         int height; /**< New terminal height in rows. */
     } zetui_resize_event_t;
 
+    /** @brief What a mouse event reports. */
+    typedef enum zetui_mouse_action
+    {
+        ZETUI_MOUSE_PRESS = 0,     /**< Button pressed. */
+        ZETUI_MOUSE_RELEASE = 1,   /**< Button released. */
+        ZETUI_MOUSE_MOTION = 2,    /**< Movement with a button held (drag). */
+        ZETUI_MOUSE_WHEEL_UP = 3,  /**< Wheel scrolled up. */
+        ZETUI_MOUSE_WHEEL_DOWN = 4 /**< Wheel scrolled down. */
+    } zetui_mouse_action_t;
+
+    /** @brief Which button a mouse event refers to. */
+    typedef enum zetui_mouse_button
+    {
+        ZETUI_MOUSE_BUTTON_NONE = 0,  /**< No button (wheel events). */
+        ZETUI_MOUSE_BUTTON_LEFT = 1,
+        ZETUI_MOUSE_BUTTON_MIDDLE = 2,
+        ZETUI_MOUSE_BUTTON_RIGHT = 3
+    } zetui_mouse_button_t;
+
+    /** @brief Mouse event payload (requires zetui_mouse_enable()). */
+    typedef struct zetui_mouse_event
+    {
+        zetui_mouse_action_t action; /**< Press, release, motion or wheel. */
+        zetui_mouse_button_t button; /**< Button for press/release/motion. */
+        int x;            /**< Column (0-based). */
+        int y;            /**< Row (0-based). */
+        zetui_u32 mods;   /**< Active modifier flags (@c ZETUI_MOD_*). */
+    } zetui_mouse_event_t;
+
     /** @brief Union of all event payloads. */
     typedef union zetui_event_data
     {
         zetui_key_event_t    key;    /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_KEY. */
         zetui_resize_event_t resize; /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_RESIZE. */
+        zetui_mouse_event_t  mouse;  /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_MOUSE. */
     } zetui_event_data_t;
 
     /**
-     * @brief A terminal event (key press or resize).
+     * @brief A terminal event (key press, resize, or mouse).
      *
      * Check @c type first, then access the appropriate field of @c data.
      */
@@ -328,6 +359,18 @@ extern "C"
 #define ZETUI_BOX_BT 9  /**< Bottom T-junction   ┴ */
 #define ZETUI_BOX_X  10 /**< Cross               ┼ */
     /** @} */
+
+    /**
+     * @brief Which character set to use for box-drawing.
+     *
+     * Passed to @c zetui_draw_box() to select the visual appearance.
+     */
+    typedef enum zetui_box_style
+    {
+        ZETUI_BOX_STYLE_LIGHT  = 0, /**< Thin single lines  ┌─┐. */
+        ZETUI_BOX_STYLE_HEAVY  = 1, /**< Bold single lines  ┏━┓. */
+        ZETUI_BOX_STYLE_DOUBLE = 2  /**< Double lines       ╔═╗. */
+    } zetui_box_style_t;
 
     /* ================================================================== */
     /*  Public API                                                         */
@@ -435,6 +478,23 @@ extern "C"
      */
     zetui_event_t zetui_wait_event (zetui_ctx_t *ctx, int timeout_ms);
 
+    /**
+     * @brief Enable mouse reporting (SGR protocol).
+     *
+     * Button presses, releases, wheel scrolls and drag motion are then
+     * delivered as @c ZETUI_EVENT_MOUSE events. Off by default because
+     * mouse reporting takes over the terminal's native text selection.
+     * Automatically disabled by zetui_shutdown().
+     * @param ctx Initialised context.
+     */
+    void zetui_mouse_enable (zetui_ctx_t *ctx);
+
+    /**
+     * @brief Disable mouse reporting.
+     * @param ctx Initialised context.
+     */
+    void zetui_mouse_disable (zetui_ctx_t *ctx);
+
     /* --- Drawing helpers ---------------------------------------------- */
 
     /**
@@ -475,16 +535,17 @@ extern "C"
                          zetui_style_t style);
 
     /**
-     * @brief Draw a light box-drawing rectangle.
-     * @param ctx   Initialised context.
-     * @param x     Left column.
-     * @param y     Top row.
-     * @param w     Width in columns (must be >= 2).
-     * @param h     Height in rows (must be >= 2).
-     * @param style Visual style for all border cells.
+     * @brief Draw a box-drawing rectangle.
+     * @param ctx      Initialised context.
+     * @param x        Left column.
+     * @param y        Top row.
+     * @param w        Width in columns (must be >= 2).
+     * @param h        Height in rows (must be >= 2).
+     * @param box      Character set: light, heavy, or double.
+     * @param style    Visual style for all border cells.
      */
     void zetui_draw_box (zetui_ctx_t *ctx, int x, int y, int w, int h,
-                         zetui_style_t style);
+                         zetui_box_style_t box, zetui_style_t style);
 
     /**
      * @brief Fill a rectangular region with a single cell.
@@ -745,6 +806,9 @@ extern "C"
 
         /* Whether the terminal itself currently shows the cursor */
         int term_cursor_on;
+
+        /* Whether SGR mouse reporting is enabled */
+        int mouse_on;
 
         /* Set by SIGWINCH handler */
         int resize_pending;
@@ -1463,11 +1527,33 @@ extern "C"
     }
 
     void
+    zetui_mouse_enable (zetui_ctx_t *ctx)
+    {
+        if (ctx->mouse_on)
+            return;
+        /* button events + drag motion + SGR extended coordinates */
+        zetui__write_all (ctx->fd_out, "\033[?1000h\033[?1002h\033[?1006h",
+                          24u);
+        ctx->mouse_on = 1;
+    }
+
+    void
+    zetui_mouse_disable (zetui_ctx_t *ctx)
+    {
+        if (!ctx->mouse_on)
+            return;
+        zetui__write_all (ctx->fd_out, "\033[?1006l\033[?1002l\033[?1000l",
+                          24u);
+        ctx->mouse_on = 0;
+    }
+
+    void
     zetui_shutdown (zetui_ctx_t *ctx)
     {
         if (!ctx)
             return;
 
+        zetui_mouse_disable (ctx);
         sigaction (SIGWINCH, &ctx->old_winch, NULL);
         sigprocmask (SIG_SETMASK, &ctx->orig_mask, NULL);
         zetui__write_all (ctx->fd_out, "\033[?25h\033[?1049l", 14u);
@@ -1729,6 +1815,89 @@ extern "C"
                             }
                     }
 
+                /* SGR mouse report: ESC [ < Cb ; Cx ; Cy (M|m) */
+                if (rem >= 3 && buf[1] == (unsigned char)'['
+                    && buf[2] == (unsigned char)'<')
+                    {
+                        int code, mx, my, j;
+                        unsigned char final;
+
+                        code = mx = my = 0;
+                        j = 3;
+                        while (j < rem && buf[j] >= (unsigned char)'0'
+                               && buf[j] <= (unsigned char)'9')
+                            code = code * 10 + (buf[j++] - '0');
+                        if (j < rem && buf[j] == (unsigned char)';')
+                            j++;
+                        while (j < rem && buf[j] >= (unsigned char)'0'
+                               && buf[j] <= (unsigned char)'9')
+                            mx = mx * 10 + (buf[j++] - '0');
+                        if (j < rem && buf[j] == (unsigned char)';')
+                            j++;
+                        while (j < rem && buf[j] >= (unsigned char)'0'
+                               && buf[j] <= (unsigned char)'9')
+                            my = my * 10 + (buf[j++] - '0');
+                        final = (j < rem) ? buf[j] : 0u;
+
+                        if (final == (unsigned char)'M'
+                            || final == (unsigned char)'m')
+                            {
+                                zetui_mouse_event_t *me;
+
+                                ev.type = ZETUI_EVENT_MOUSE;
+                                me = &ev.data.mouse;
+                                me->x = mx > 0 ? mx - 1 : 0;
+                                me->y = my > 0 ? my - 1 : 0;
+                                me->mods = ZETUI_MOD_NONE;
+                                if (code & 4)
+                                    me->mods |= ZETUI_MOD_SHIFT;
+                                if (code & 8)
+                                    me->mods |= ZETUI_MOD_ALT;
+                                if (code & 16)
+                                    me->mods |= ZETUI_MOD_CTRL;
+
+                                if (code & 64)
+                                    {
+                                        me->action = (code & 1)
+                                                         ? ZETUI_MOUSE_WHEEL_DOWN
+                                                         : ZETUI_MOUSE_WHEEL_UP;
+                                        me->button = ZETUI_MOUSE_BUTTON_NONE;
+                                    }
+                                else
+                                    {
+                                        switch (code & 3)
+                                            {
+                                            case 0:
+                                                me->button
+                                                    = ZETUI_MOUSE_BUTTON_LEFT;
+                                                break;
+                                            case 1:
+                                                me->button
+                                                    = ZETUI_MOUSE_BUTTON_MIDDLE;
+                                                break;
+                                            case 2:
+                                                me->button
+                                                    = ZETUI_MOUSE_BUTTON_RIGHT;
+                                                break;
+                                            default:
+                                                me->button
+                                                    = ZETUI_MOUSE_BUTTON_NONE;
+                                                break;
+                                            }
+                                        if (code & 32)
+                                            me->action = ZETUI_MOUSE_MOTION;
+                                        else
+                                            me->action
+                                                = (final == (unsigned char)'M')
+                                                      ? ZETUI_MOUSE_PRESS
+                                                      : ZETUI_MOUSE_RELEASE;
+                                    }
+                                ib->pos += j + 1;
+                                return ev;
+                            }
+                        /* malformed: fall through to CSI consumption */
+                    }
+
                 /* Alt-modified key: terminals prefix the key's bytes
                    with ESC. Consume the prefix, parse the underlying
                    key (sequences included: urxvt sends ESC ESC [ A for
@@ -1952,31 +2121,45 @@ extern "C"
 
     void
     zetui_draw_box (zetui_ctx_t *ctx, int x, int y, int w, int h,
-                    zetui_style_t style)
+                    zetui_box_style_t box, zetui_style_t style)
     {
+        const zetui_u32 *t;
         zetui_cell_t c;
         int i;
 
         if (w < 2 || h < 2)
             return;
 
-        c = zetui_cell_make (zetui_box_light[ZETUI_BOX_TL], style);
+        switch (box)
+            {
+            case ZETUI_BOX_STYLE_HEAVY:
+                t = zetui_box_heavy;
+                break;
+            case ZETUI_BOX_STYLE_DOUBLE:
+                t = zetui_box_double;
+                break;
+            default:
+                t = zetui_box_light;
+                break;
+            }
+
+        c = zetui_cell_make (t[ZETUI_BOX_TL], style);
         zetui_set_cell (ctx, x, y, c);
-        c = zetui_cell_make (zetui_box_light[ZETUI_BOX_TR], style);
+        c = zetui_cell_make (t[ZETUI_BOX_TR], style);
         zetui_set_cell (ctx, x + w - 1, y, c);
-        c = zetui_cell_make (zetui_box_light[ZETUI_BOX_BL], style);
+        c = zetui_cell_make (t[ZETUI_BOX_BL], style);
         zetui_set_cell (ctx, x, y + h - 1, c);
-        c = zetui_cell_make (zetui_box_light[ZETUI_BOX_BR], style);
+        c = zetui_cell_make (t[ZETUI_BOX_BR], style);
         zetui_set_cell (ctx, x + w - 1, y + h - 1, c);
 
-        c = zetui_cell_make (zetui_box_light[ZETUI_BOX_H], style);
+        c = zetui_cell_make (t[ZETUI_BOX_H], style);
         for (i = 1; i < w - 1; i++)
             {
                 zetui_set_cell (ctx, x + i, y, c);
                 zetui_set_cell (ctx, x + i, y + h - 1, c);
             }
 
-        c = zetui_cell_make (zetui_box_light[ZETUI_BOX_V], style);
+        c = zetui_cell_make (t[ZETUI_BOX_V], style);
         for (i = 1; i < h - 1; i++)
             {
                 zetui_set_cell (ctx, x, y + i, c);

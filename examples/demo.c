@@ -103,39 +103,6 @@ sb_hex (char *buf, int *pos, zetui_u32 cp)
 }
 
 /* ================================================================== */
-/*  Helper: draw a box using an arbitrary codepoint table             */
-/*  (zetui_draw_box always uses the light set; this covers all three) */
-/* ================================================================== */
-
-static void
-draw_box_table (zetui_ctx_t *ctx, int x, int y, int w, int h,
-                const zetui_u32 *t, zetui_style_t sty)
-{
-    int i;
-    if (w < 2 || h < 2)
-        return;
-    zetui_set_cell (ctx, x, y, zetui_cell_make (t[ZETUI_BOX_TL], sty));
-    zetui_set_cell (ctx, x + w - 1, y, zetui_cell_make (t[ZETUI_BOX_TR], sty));
-    zetui_set_cell (ctx, x, y + h - 1, zetui_cell_make (t[ZETUI_BOX_BL], sty));
-    zetui_set_cell (ctx, x + w - 1, y + h - 1,
-                    zetui_cell_make (t[ZETUI_BOX_BR], sty));
-    for (i = 1; i < w - 1; i++)
-        {
-            zetui_set_cell (ctx, x + i, y,
-                            zetui_cell_make (t[ZETUI_BOX_H], sty));
-            zetui_set_cell (ctx, x + i, y + h - 1,
-                            zetui_cell_make (t[ZETUI_BOX_H], sty));
-        }
-    for (i = 1; i < h - 1; i++)
-        {
-            zetui_set_cell (ctx, x, y + i,
-                            zetui_cell_make (t[ZETUI_BOX_V], sty));
-            zetui_set_cell (ctx, x + w - 1, y + i,
-                            zetui_cell_make (t[ZETUI_BOX_V], sty));
-        }
-}
-
-/* ================================================================== */
 /*  Style shortcuts                                                    */
 /* ================================================================== */
 
@@ -344,16 +311,15 @@ panel_boxes (zetui_ctx_t *ctx, int x, int y, int w, int h)
     fill_cell = zetui_cell_make ((zetui_u32)' ', fill_sty);
 
     /* -- Three box styles ------------------------------------------ */
-    zetui_draw_str (
-        ctx, x, y,
-        "zetui_box_light / heavy / double  via draw_box_table():", hdr);
+    zetui_draw_str (ctx, x, y,
+                    "zetui_draw_box: light / heavy / double styles:", hdr);
 
     bw = (w - 2) / 3 - 1;
     bh = 7;
 
-    /* Light: zetui_draw_box uses light internally */
+    /* Light */
     bx = x;
-    zetui_draw_box (ctx, bx, y + 1, bw, bh, plain);
+    zetui_draw_box (ctx, bx, y + 1, bw, bh, ZETUI_BOX_STYLE_LIGHT, plain);
     zetui_draw_str (ctx, bx + 2, y + 2, "light", accent);
     /* horizontal divider inside using T-junctions */
     zetui_set_cell (ctx, bx, y + 4,
@@ -365,7 +331,7 @@ panel_boxes (zetui_ctx_t *ctx, int x, int y, int w, int h)
 
     /* Heavy */
     bx = x + bw + 1;
-    draw_box_table (ctx, bx, y + 1, bw, bh, zetui_box_heavy, plain);
+    zetui_draw_box (ctx, bx, y + 1, bw, bh, ZETUI_BOX_STYLE_HEAVY, plain);
     zetui_draw_str (ctx, bx + 2, y + 2, "heavy", accent);
     zetui_set_cell (ctx, bx, y + 4,
                     zetui_cell_make (zetui_box_heavy[ZETUI_BOX_LT], plain));
@@ -376,7 +342,7 @@ panel_boxes (zetui_ctx_t *ctx, int x, int y, int w, int h)
 
     /* Double */
     bx = x + (bw + 1) * 2;
-    draw_box_table (ctx, bx, y + 1, bw, bh, zetui_box_double, plain);
+    zetui_draw_box (ctx, bx, y + 1, bw, bh, ZETUI_BOX_STYLE_DOUBLE, plain);
     zetui_draw_str (ctx, bx + 2, y + 2, "double", accent);
     zetui_set_cell (ctx, bx, y + 4,
                     zetui_cell_make (zetui_box_double[ZETUI_BOX_LT], plain));
@@ -677,6 +643,81 @@ panel_input (zetui_ctx_t *ctx, int x, int y, int w, int h, zetui_event_t *last,
             /* zetui_cursor_move demo: park cursor on the glyph box */
             zetui_cursor_move (ctx, x + 10, row - 2);
         }
+    else if (last->type == ZETUI_EVENT_MOUSE)
+        {
+            zetui_mouse_event_t *me;
+            const char *act;
+            const char *btn;
+
+            me = &last->data.mouse;
+
+            switch ((int)me->action)
+                {
+                case ZETUI_MOUSE_PRESS:
+                    act = "press";
+                    break;
+                case ZETUI_MOUSE_RELEASE:
+                    act = "release";
+                    break;
+                case ZETUI_MOUSE_MOTION:
+                    act = "motion (drag)";
+                    break;
+                case ZETUI_MOUSE_WHEEL_UP:
+                    act = "wheel up";
+                    break;
+                case ZETUI_MOUSE_WHEEL_DOWN:
+                    act = "wheel down";
+                    break;
+                default:
+                    act = "?";
+                    break;
+                }
+            switch ((int)me->button)
+                {
+                case ZETUI_MOUSE_BUTTON_LEFT:
+                    btn = "left";
+                    break;
+                case ZETUI_MOUSE_BUTTON_MIDDLE:
+                    btn = "middle";
+                    break;
+                case ZETUI_MOUSE_BUTTON_RIGHT:
+                    btn = "right";
+                    break;
+                default:
+                    btn = "none";
+                    break;
+                }
+
+            zetui_draw_str (ctx, x, row, "event type  :", lbl);
+            zetui_draw_str (ctx, x + 14, row, "MOUSE", val);
+            row++;
+            zetui_draw_str (ctx, x, row, "action      :", lbl);
+            zetui_draw_str (ctx, x + 14, row, act, val);
+            row++;
+            zetui_draw_str (ctx, x, row, "button      :", lbl);
+            zetui_draw_str (ctx, x + 14, row, btn, val);
+            row++;
+            pos = 0;
+            sb_int (buf, &pos, me->x);
+            sb_ch (buf, &pos, ',');
+            sb_int (buf, &pos, me->y);
+            zetui_draw_str (ctx, x, row, "position    :", lbl);
+            zetui_draw_str (ctx, x + 14, row, buf, val);
+            row++;
+            {
+                const char *m;
+                if (me->mods & ZETUI_MOD_CTRL)
+                    m = "CTRL";
+                else if (me->mods & ZETUI_MOD_ALT)
+                    m = "ALT";
+                else if (me->mods & ZETUI_MOD_SHIFT)
+                    m = "SHIFT";
+                else
+                    m = "none";
+                zetui_draw_str (ctx, x, row, "modifiers   :", lbl);
+                zetui_draw_str (ctx, x + 14, row, m, val);
+            }
+        }
     else if (last->type == ZETUI_EVENT_RESIZE)
         {
             zetui_draw_str (ctx, x, row, "event type  :", lbl);
@@ -952,7 +993,7 @@ draw_chrome (zetui_ctx_t *ctx, int sel, int total, zetui_event_t *last)
                         ZETUI_ATTR_NONE);
 
     /* Outer heavy box */
-    draw_box_table (ctx, 0, 0, w, h, zetui_box_heavy, frame);
+    zetui_draw_box (ctx, 0, 0, w, h, ZETUI_BOX_STYLE_HEAVY, frame);
 
     /* Title bar (row 1) */
     zetui_fill_rect (ctx, 1, 1, w - 2, 1,
@@ -1045,6 +1086,7 @@ main (void)
         return 1;
 
     zetui_cursor_hide (ctx); /* hide cursor during normal navigation */
+    zetui_mouse_enable (ctx); /* SGR mouse: shown on the Input panel */
 
     sel = 0;
     running = 1;

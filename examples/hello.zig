@@ -17,7 +17,7 @@ pub fn main() !void {
         tui.clear();
 
         // Outer border
-        tui.drawBox(0, 0, w, h, .{});
+        tui.drawBox(0, 0, w, h, .light, .{});
 
         // Title bar
         tui.fillRect(1, 1, w - 2, 1, .{ .style = .{ .bg = .blue } });
