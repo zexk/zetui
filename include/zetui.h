@@ -141,15 +141,19 @@ extern "C"
      *  @brief Bitfield flags OR-combined into @c zetui_style_t.attrs.
      *  @{
      */
-#define ZETUI_ATTR_NONE      0u         /**< No attributes. */
-#define ZETUI_ATTR_BOLD      (1u << 0)  /**< Bold / increased intensity. */
-#define ZETUI_ATTR_DIM       (1u << 1)  /**< Dim / decreased intensity. */
-#define ZETUI_ATTR_ITALIC    (1u << 2)  /**< Italic (terminal support varies). */
-#define ZETUI_ATTR_UNDERLINE (1u << 3)  /**< Single underline. */
-#define ZETUI_ATTR_BLINK     (1u << 4)  /**< Slow blink (terminal support varies). */
-#define ZETUI_ATTR_REVERSE   (1u << 5)  /**< Swap foreground and background. */
-#define ZETUI_ATTR_HIDDEN    (1u << 6)  /**< Invisible text. */
-#define ZETUI_ATTR_STRIKE    (1u << 7)  /**< Strikethrough. */
+#define ZETUI_ATTR_NONE             0u          /**< No attributes. */
+#define ZETUI_ATTR_BOLD             (1u << 0)   /**< Bold / increased intensity. */
+#define ZETUI_ATTR_DIM              (1u << 1)   /**< Dim / decreased intensity. */
+#define ZETUI_ATTR_ITALIC           (1u << 2)   /**< Italic (terminal support varies). */
+#define ZETUI_ATTR_UNDERLINE        (1u << 3)   /**< Single underline. */
+#define ZETUI_ATTR_BLINK            (1u << 4)   /**< Slow blink (terminal support varies). */
+#define ZETUI_ATTR_REVERSE          (1u << 5)   /**< Swap foreground and background. */
+#define ZETUI_ATTR_HIDDEN           (1u << 6)   /**< Invisible text. */
+#define ZETUI_ATTR_STRIKE           (1u << 7)   /**< Strikethrough. */
+#define ZETUI_ATTR_UNDERLINE_DOUBLE (1u << 8)   /**< Double underline (VTE subparam). */
+#define ZETUI_ATTR_UNDERLINE_CURLY  (1u << 9)   /**< Curly/wavy underline. */
+#define ZETUI_ATTR_UNDERLINE_DOTTED (1u << 10)  /**< Dotted underline. */
+#define ZETUI_ATTR_UNDERLINE_DASHED (1u << 11)  /**< Dashed underline. */
     /** @} */
 
     /* ================================================================== */
@@ -175,8 +179,9 @@ extern "C"
                               @c ZETUI_WIDE_PAD marks a wide-char tail. */
         zetui_i32 fg;    /**< Foreground color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
         zetui_i32 bg;    /**< Background color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
-        zetui_u32 attrs; /**< Attribute flags (@c ZETUI_ATTR_* OR-combined). */
-        int       link;  /**< Hyperlink ID from @c zetui_register_link(); 0 = none. */
+        zetui_u32 attrs;    /**< Attribute flags (@c ZETUI_ATTR_* OR-combined). */
+        zetui_i32 ul_color; /**< Underline color (same encoding as fg/bg); ZETUI_COLOR_DEFAULT = terminal default. */
+        int       link;     /**< Hyperlink ID from @c zetui_register_link(); 0 = none. */
     } zetui_cell_t;
 
     /* ================================================================== */
@@ -190,9 +195,10 @@ extern "C"
      */
     typedef struct zetui_style
     {
-        zetui_i32 fg;    /**< Foreground color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
-        zetui_i32 bg;    /**< Background color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
-        zetui_u32 attrs; /**< Attribute flags (@c ZETUI_ATTR_* OR-combined). */
+        zetui_i32 fg;       /**< Foreground color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
+        zetui_i32 bg;       /**< Background color (@c zetui_color_t or @c ZETUI_COLOR_DEFAULT). */
+        zetui_u32 attrs;    /**< Attribute flags (@c ZETUI_ATTR_* OR-combined). */
+        zetui_i32 ul_color; /**< Underline color (same encoding as fg); ZETUI_COLOR_DEFAULT = terminal default. */
     } zetui_style_t;
 
     /* ================================================================== */
@@ -1080,6 +1086,7 @@ extern "C"
         zetui_i32 ren_fg;
         zetui_i32 ren_bg;
         zetui_u32 ren_attrs;
+        zetui_i32 ren_ul_color;
         int ren_x;
         int ren_y;
 
@@ -1375,8 +1382,9 @@ extern "C"
 
     static int
     zetui__ansi_style (zetui__obuf_t *ob, zetui_i32 fg, zetui_i32 bg,
-                       zetui_u32 attrs, zetui_i32 *c_fg, zetui_i32 *c_bg,
-                       zetui_u32 *c_attrs)
+                       zetui_u32 attrs, zetui_i32 ul_color,
+                       zetui_i32 *c_fg, zetui_i32 *c_bg, zetui_u32 *c_attrs,
+                       zetui_i32 *c_ul_color)
     {
         zetui_u32 turned_off;
         int need_reset;
@@ -1397,6 +1405,7 @@ extern "C"
                 *c_fg = ZETUI_COLOR_DEFAULT;
                 *c_bg = ZETUI_COLOR_DEFAULT;
                 *c_attrs = ZETUI_ATTR_NONE;
+                *c_ul_color = ZETUI_COLOR_DEFAULT;
             }
 
 #define ZETUI__ATTR_ON(flag, code)                                             \
@@ -1411,10 +1420,40 @@ extern "C"
         ZETUI__ATTR_ON (ZETUI_ATTR_REVERSE, "7");
         ZETUI__ATTR_ON (ZETUI_ATTR_HIDDEN, "8");
         ZETUI__ATTR_ON (ZETUI_ATTR_STRIKE, "9");
+        ZETUI__ATTR_ON (ZETUI_ATTR_UNDERLINE_DOUBLE, "4:2");
+        ZETUI__ATTR_ON (ZETUI_ATTR_UNDERLINE_CURLY,  "4:3");
+        ZETUI__ATTR_ON (ZETUI_ATTR_UNDERLINE_DOTTED, "4:4");
+        ZETUI__ATTR_ON (ZETUI_ATTR_UNDERLINE_DASHED, "4:5");
 
 #undef ZETUI__ATTR_ON
 
         *c_attrs = attrs;
+
+        if (ul_color != *c_ul_color)
+            {
+                if (ul_color == ZETUI_COLOR_DEFAULT)
+                    {
+                        zetui__obuf_append_str (ob, "\033[59m");
+                    }
+                else if (ZETUI_COLOR_IS_RGB (ul_color))
+                    {
+                        zetui__obuf_append_str (ob, "\033[58;2;");
+                        zetui__obuf_append_int (ob, (ul_color >> 16) & 0xFF);
+                        zetui__obuf_append (ob, ";", 1u);
+                        zetui__obuf_append_int (ob, (ul_color >> 8) & 0xFF);
+                        zetui__obuf_append (ob, ";", 1u);
+                        zetui__obuf_append_int (ob, ul_color & 0xFF);
+                        zetui__obuf_append (ob, "m", 1u);
+                    }
+                else if (ZETUI_COLOR_IS_256 (ul_color))
+                    {
+                        zetui__obuf_append_str (ob, "\033[58;5;");
+                        zetui__obuf_append_int (ob,
+                                                (int)((zetui_u32)(ul_color) & 0xFFu));
+                        zetui__obuf_append (ob, "m", 1u);
+                    }
+                *c_ul_color = ul_color;
+            }
 
         if (fg != *c_fg)
             {
@@ -1505,6 +1544,7 @@ extern "C"
         c.fg = ZETUI_COLOR_DEFAULT;
         c.bg = ZETUI_COLOR_DEFAULT;
         c.attrs = ZETUI_ATTR_NONE;
+        c.ul_color = ZETUI_COLOR_DEFAULT;
         c.link = 0;
         return c;
     }
@@ -1513,7 +1553,8 @@ extern "C"
     zetui__cells_eq (zetui_cell_t a, zetui_cell_t b)
     {
         return a.ch == b.ch && a.fg == b.fg && a.bg == b.bg
-               && a.attrs == b.attrs && a.link == b.link;
+               && a.attrs == b.attrs && a.ul_color == b.ul_color
+               && a.link == b.link;
     }
 
     static int
@@ -1638,6 +1679,7 @@ extern "C"
         ctx->ren_fg = ZETUI_COLOR_DEFAULT;
         ctx->ren_bg = ZETUI_COLOR_DEFAULT;
         ctx->ren_attrs = ZETUI_ATTR_NONE;
+        ctx->ren_ul_color = ZETUI_COLOR_DEFAULT;
         ctx->ren_x = -1;
         ctx->ren_y = -1;
         ctx->ren_link = 0;
@@ -1703,8 +1745,10 @@ extern "C"
                             }
 
                         zetui__ansi_style (&ctx->out, b->fg, b->bg, b->attrs,
+                                           b->ul_color,
                                            &ctx->ren_fg, &ctx->ren_bg,
-                                           &ctx->ren_attrs);
+                                           &ctx->ren_attrs,
+                                           &ctx->ren_ul_color);
 
                         cp = b->ch == 0u ? (zetui_u32)' ' : b->ch;
                         ulen = zetui__utf8_enc (cp, utf8);
@@ -2628,6 +2672,7 @@ extern "C"
         c.fg = style.fg;
         c.bg = style.bg;
         c.attrs = style.attrs;
+        c.ul_color = style.ul_color;
         c.link = 0;
         return c;
     }

@@ -52,7 +52,7 @@ exe.root_module.addImport("zetui", zetui_dep.module("zetui"));
 
 ## `zetui.Style`
 
-The Zig `Style` struct extends the C struct with optional true-color and palette fields:
+The Zig `Style` struct extends the C struct with optional true-color, palette, and underline-color fields:
 
 ```zig
 pub const Style = struct {
@@ -63,6 +63,8 @@ pub const Style = struct {
     rgb_bg: ?Rgb  = null,   // 24-bit RGB; overrides bg when set
     pal_fg: ?u8   = null,   // xterm 256-color palette index; overrides fg and rgb_fg
     pal_bg: ?u8   = null,   // xterm 256-color palette index; overrides bg and rgb_bg
+    rgb_ul: ?Rgb  = null,   // 24-bit RGB underline color
+    pal_ul: ?u8   = null,   // xterm 256-color palette index for underline color (overrides rgb_ul)
 };
 ```
 
@@ -78,6 +80,13 @@ tui.drawStr(1, 1, "orange bold text", orange);
 // 256-color palette:
 const xterm_orange = zetui.Style{ .pal_fg = 202 };
 tui.drawStr(1, 2, "palette orange", xterm_orange);
+
+// Curly underline with a red underline color:
+const err_style = zetui.Style{
+    .attrs  = zetui.Attr.underline_curly,
+    .rgb_ul = zetui.rgb(255, 0, 0),
+};
+tui.drawStr(1, 3, "error text", err_style);
 ```
 
 ---

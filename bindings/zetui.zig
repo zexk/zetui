@@ -67,6 +67,10 @@ pub const Attr = struct {
     pub const reverse = c.ZETUI_ATTR_REVERSE;
     pub const hidden = c.ZETUI_ATTR_HIDDEN;
     pub const strike = c.ZETUI_ATTR_STRIKE;
+    pub const underline_double = c.ZETUI_ATTR_UNDERLINE_DOUBLE;
+    pub const underline_curly = c.ZETUI_ATTR_UNDERLINE_CURLY;
+    pub const underline_dotted = c.ZETUI_ATTR_UNDERLINE_DOTTED;
+    pub const underline_dashed = c.ZETUI_ATTR_UNDERLINE_DASHED;
 };
 
 pub const Mod = struct {
@@ -200,6 +204,10 @@ pub const Style = struct {
     pal_fg: ?u8 = null,
     /// xterm 256-color palette index for the background (overrides bg and rgb_bg).
     pal_bg: ?u8 = null,
+    /// Underline color. Use rgb() or a palette index. null = terminal default.
+    rgb_ul: ?Rgb = null,
+    /// xterm 256-color palette index for the underline color (overrides rgb_ul).
+    pal_ul: ?u8 = null,
 
     fn toC(self: Style) c.zetui_style_t {
         const fg_val: i32 = if (self.pal_fg) |n|
@@ -214,10 +222,17 @@ pub const Style = struct {
             (@as(i32, 1) << 24) | (@as(i32, v.r) << 16) | (@as(i32, v.g) << 8) | @as(i32, v.b)
         else
             self.bg.toC();
+        const ul_val: i32 = if (self.pal_ul) |n|
+            (@as(i32, 1) << 25) | @as(i32, n)
+        else if (self.rgb_ul) |v|
+            (@as(i32, 1) << 24) | (@as(i32, v.r) << 16) | (@as(i32, v.g) << 8) | @as(i32, v.b)
+        else
+            -1; // ZETUI_COLOR_DEFAULT
         return .{
             .fg = fg_val,
             .bg = bg_val,
             .attrs = self.attrs,
+            .ul_color = ul_val,
         };
     }
 };

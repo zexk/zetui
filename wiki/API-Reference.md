@@ -92,15 +92,21 @@ Bitfield flags OR-combined into `zetui_style_t.attrs`:
 
 | Constant | Effect |
 |---|---|
-| `ZETUI_ATTR_NONE`      | No attributes |
-| `ZETUI_ATTR_BOLD`      | Bold / increased intensity |
-| `ZETUI_ATTR_DIM`       | Dim / decreased intensity |
-| `ZETUI_ATTR_ITALIC`    | Italic |
-| `ZETUI_ATTR_UNDERLINE` | Single underline |
-| `ZETUI_ATTR_BLINK`     | Slow blink |
-| `ZETUI_ATTR_REVERSE`   | Swap foreground and background |
-| `ZETUI_ATTR_HIDDEN`    | Invisible text |
-| `ZETUI_ATTR_STRIKE`    | Strikethrough |
+| `ZETUI_ATTR_NONE`             | No attributes |
+| `ZETUI_ATTR_BOLD`             | Bold / increased intensity |
+| `ZETUI_ATTR_DIM`              | Dim / decreased intensity |
+| `ZETUI_ATTR_ITALIC`           | Italic |
+| `ZETUI_ATTR_UNDERLINE`        | Single underline (`SGR 4`) |
+| `ZETUI_ATTR_BLINK`            | Slow blink |
+| `ZETUI_ATTR_REVERSE`          | Swap foreground and background |
+| `ZETUI_ATTR_HIDDEN`           | Invisible text |
+| `ZETUI_ATTR_STRIKE`           | Strikethrough |
+| `ZETUI_ATTR_UNDERLINE_DOUBLE` | Double underline (`SGR 4:2`) |
+| `ZETUI_ATTR_UNDERLINE_CURLY`  | Curly/wavy underline (`SGR 4:3`) |
+| `ZETUI_ATTR_UNDERLINE_DOTTED` | Dotted underline (`SGR 4:4`) |
+| `ZETUI_ATTR_UNDERLINE_DASHED` | Dashed underline (`SGR 4:5`) |
+
+The styled underline variants (`DOUBLE`, `CURLY`, `DOTTED`, `DASHED`) use VTE subparameter syntax supported by kitty, foot, and other modern terminals. Pair them with `zetui_style_t.ul_color` to set the underline color independently of the text color.
 
 ---
 
@@ -108,11 +114,12 @@ Bitfield flags OR-combined into `zetui_style_t.attrs`:
 
 ```c
 typedef struct zetui_cell {
-    zetui_u32 ch;    // Unicode codepoint; 0 = space; ZETUI_WIDE_PAD = wide-char tail
-    zetui_i32 fg;    // Foreground: zetui_color_t or ZETUI_COLOR_DEFAULT
-    zetui_i32 bg;    // Background: zetui_color_t or ZETUI_COLOR_DEFAULT
-    zetui_u32 attrs; // ZETUI_ATTR_* flags OR-combined
-    int       link;  // Hyperlink ID from zetui_register_link(); 0 = none
+    zetui_u32 ch;       // Unicode codepoint; 0 = space; ZETUI_WIDE_PAD = wide-char tail
+    zetui_i32 fg;       // Foreground: zetui_color_t or ZETUI_COLOR_DEFAULT
+    zetui_i32 bg;       // Background: zetui_color_t or ZETUI_COLOR_DEFAULT
+    zetui_u32 attrs;    // ZETUI_ATTR_* flags OR-combined
+    zetui_i32 ul_color; // Underline color (same encoding as fg); ZETUI_COLOR_DEFAULT = inherit
+    int       link;     // Hyperlink ID from zetui_register_link(); 0 = none
 } zetui_cell_t;
 ```
 
@@ -127,10 +134,11 @@ typedef struct zetui_style {
     zetui_i32 fg;
     zetui_i32 bg;
     zetui_u32 attrs;
+    zetui_i32 ul_color; // underline color; ZETUI_COLOR_DEFAULT = terminal default
 } zetui_style_t;
 ```
 
-Zero-initialize for terminal defaults with no attributes.
+Zero-initialize for terminal defaults with no attributes. `ul_color` uses the same encoding as `fg`/`bg` (palette, 256-color, or 24-bit RGB via `ZETUI_COLOR_RGB`). Only RGB and 256-color values are supported for underline color; 16-color values are treated as `ZETUI_COLOR_DEFAULT`.
 
 ---
 
