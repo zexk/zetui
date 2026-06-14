@@ -491,6 +491,16 @@ extern "C"
     void zetui_clear (zetui_ctx_t *ctx);
 
     /**
+     * @brief Force a full repaint on the next @c zetui_present() call.
+     *
+     * Blanks the front buffer so every cell is considered dirty regardless
+     * of what the back buffer contains.  Use after SIGTSTP/SIGCONT or
+     * any event that may have corrupted the visible terminal state.
+     * @param ctx Initialised context.
+     */
+    void zetui_invalidate (zetui_ctx_t *ctx);
+
+    /**
      * @brief Write a single cell to the back buffer.
      *
      * Out-of-bounds coordinates are silently ignored. Wide codepoints
@@ -1448,6 +1458,17 @@ extern "C"
         blank = zetui__blank_cell ();
         for (i = 0u; i < ctx->ncells; i++)
             ctx->back[i] = blank;
+    }
+
+    void
+    zetui_invalidate (zetui_ctx_t *ctx)
+    {
+        zetui_cell_t blank;
+        size_t i;
+
+        blank = zetui__blank_cell ();
+        for (i = 0u; i < ctx->ncells; i++)
+            ctx->front[i] = blank;
     }
 
     void

@@ -407,6 +407,11 @@ pub const Context = struct {
         c.zetui_clear(self.raw);
     }
 
+    /// Mark all cells dirty so the next present() redraws everything.
+    pub fn invalidate(self: *Context) void {
+        c.zetui_invalidate(self.raw);
+    }
+
     /// Flush the back buffer to the terminal.
     pub fn present(self: *Context) Error!void {
         return mapError(c.zetui_present(self.raw));
