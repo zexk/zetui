@@ -249,7 +249,8 @@ extern "C"
         ZETUI_EVENT_NONE = 0,   /**< No event (poll returned immediately). */
         ZETUI_EVENT_KEY = 1,    /**< Keyboard event; see @c data.key. */
         ZETUI_EVENT_RESIZE = 2, /**< Terminal was resized; see @c data.resize. */
-        ZETUI_EVENT_MOUSE = 3   /**< Mouse event; see @c data.mouse. */
+        ZETUI_EVENT_MOUSE = 3,  /**< Mouse event; see @c data.mouse. */
+        ZETUI_EVENT_FOCUS = 4   /**< Focus gained/lost; see @c data.focus. */
     } zetui_event_type_t;
 
     /** @brief Keyboard event payload. */
@@ -296,12 +297,19 @@ extern "C"
         zetui_u32 mods;   /**< Active modifier flags (@c ZETUI_MOD_*). */
     } zetui_mouse_event_t;
 
+    /** @brief Focus event payload (requires zetui_focus_enable()). */
+    typedef struct zetui_focus_event
+    {
+        int focused; /**< Non-zero when the terminal window gained focus. */
+    } zetui_focus_event_t;
+
     /** @brief Union of all event payloads. */
     typedef union zetui_event_data
     {
         zetui_key_event_t    key;    /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_KEY. */
         zetui_resize_event_t resize; /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_RESIZE. */
         zetui_mouse_event_t  mouse;  /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_MOUSE. */
+        zetui_focus_event_t  focus;  /**< Valid when @c zetui_event_t.type == ZETUI_EVENT_FOCUS. */
     } zetui_event_data_t;
 
     /**
@@ -494,6 +502,21 @@ extern "C"
      * @param ctx Initialised context.
      */
     void zetui_mouse_disable (zetui_ctx_t *ctx);
+
+    /**
+     * @brief Enable focus-change reporting.
+     *
+     * The terminal sends @c ZETUI_EVENT_FOCUS when its window gains or loses
+     * focus. Off by default. Automatically disabled by zetui_shutdown().
+     * @param ctx Initialised context.
+     */
+    void zetui_focus_enable (zetui_ctx_t *ctx);
+
+    /**
+     * @brief Disable focus-change reporting.
+     * @param ctx Initialised context.
+     */
+    void zetui_focus_disable (zetui_ctx_t *ctx);
 
     /* --- Drawing helpers ---------------------------------------------- */
 
@@ -809,6 +832,9 @@ extern "C"
 
         /* Whether SGR mouse reporting is enabled */
         int mouse_on;
+
+        /* Whether focus-change reporting is enabled */
+        int focus_on;
 
         /* Set by SIGWINCH handler */
         int resize_pending;
@@ -1548,11 +1574,30 @@ extern "C"
     }
 
     void
+    zetui_focus_enable (zetui_ctx_t *ctx)
+    {
+        if (ctx->focus_on)
+            return;
+        zetui__write_all (ctx->fd_out, "\033[?1004h", 8u);
+        ctx->focus_on = 1;
+    }
+
+    void
+    zetui_focus_disable (zetui_ctx_t *ctx)
+    {
+        if (!ctx->focus_on)
+            return;
+        zetui__write_all (ctx->fd_out, "\033[?1004l", 8u);
+        ctx->focus_on = 0;
+    }
+
+    void
     zetui_shutdown (zetui_ctx_t *ctx)
     {
         if (!ctx)
             return;
 
+        zetui_focus_disable (ctx);
         zetui_mouse_disable (ctx);
         sigaction (SIGWINCH, &ctx->old_winch, NULL);
         sigprocmask (SIG_SETMASK, &ctx->orig_mask, NULL);
@@ -1896,6 +1941,20 @@ extern "C"
                                 return ev;
                             }
                         /* malformed: fall through to CSI consumption */
+                    }
+
+                /* Focus events: CSI I (gained) and CSI O (lost) */
+                if (rem >= 3 && buf[1] == (unsigned char)'[')
+                    {
+                        if (buf[2] == (unsigned char)'I'
+                            || buf[2] == (unsigned char)'O')
+                            {
+                                ev.type = ZETUI_EVENT_FOCUS;
+                                ev.data.focus.focused
+                                    = (buf[2] == (unsigned char)'I') ? 1 : 0;
+                                ib->pos += 3;
+                                return ev;
+                            }
                     }
 
                 /* Alt-modified key: terminals prefix the key's bytes

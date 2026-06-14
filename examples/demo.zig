@@ -360,6 +360,14 @@ fn panelInput(
             tui.drawStr(x, row, "new size    :", lbl);
             tui.drawSlice(x + 14, row, sz_s, val);
         },
+
+        .focus => |fe| {
+            tui.drawStr(x, row, "event type  :", lbl);
+            tui.drawStr(x + 14, row, "FOCUS", val);
+            row += 1;
+            tui.drawStr(x, row, "focused     :", lbl);
+            tui.drawStr(x + 14, row, if (fe.focused) "yes" else "no", val);
+        },
     }
 
     // Total event counter
@@ -582,7 +590,8 @@ pub fn main() !void {
     defer tui.deinit();
 
     tui.cursorHide();
-    tui.mouseEnable(); // SGR mouse: shown on the Input panel
+    tui.mouseEnable();  // SGR mouse: shown on the Input panel
+    tui.focusEnable(); // focus events: shown on the Input panel
 
     var sel: usize = 0;
     var total: i32 = 0;

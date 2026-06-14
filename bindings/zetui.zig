@@ -248,11 +248,16 @@ pub const MouseEvent = struct {
     mods: u32,
 };
 
+pub const FocusEvent = struct {
+    focused: bool,
+};
+
 pub const Event = union(enum) {
     none,
     key: KeyEvent,
     resize: ResizeEvent,
     mouse: MouseEvent,
+    focus: FocusEvent,
 
     fn fromC(ev: c.zetui_event_t) Event {
         switch (ev.type) {
@@ -280,6 +285,9 @@ pub const Event = union(enum) {
                     .y = me.y,
                     .mods = me.mods,
                 } };
+            },
+            c.ZETUI_EVENT_FOCUS => {
+                return .{ .focus = .{ .focused = ev.data.focus.focused != 0 } };
             },
             else => return .none,
         }
@@ -403,6 +411,16 @@ pub const Context = struct {
     /// Disable mouse reporting.
     pub fn mouseDisable(self: *Context) void {
         c.zetui_mouse_disable(self.raw);
+    }
+
+    /// Enable focus-change reporting (ZETUI_EVENT_FOCUS events).
+    pub fn focusEnable(self: *Context) void {
+        c.zetui_focus_enable(self.raw);
+    }
+
+    /// Disable focus-change reporting.
+    pub fn focusDisable(self: *Context) void {
+        c.zetui_focus_disable(self.raw);
     }
 
     /// Draw a null-terminated UTF-8 string.
