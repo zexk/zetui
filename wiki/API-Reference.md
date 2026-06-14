@@ -503,6 +503,12 @@ int zetui_get_link_at(const zetui_ctx_t *ctx, int x, int y);
 ```
 Return the hyperlink ID of the cell currently visible at `(x, y)` by reading the front buffer. Returns 0 if no link is active at that cell or if the coordinates are out of bounds. Use this to hit-test mouse position against rendered hyperlinks.
 
+#### `zetui_get_link_uri`
+```c
+const char *zetui_get_link_uri(const zetui_ctx_t *ctx, int id);
+```
+Reverse-lookup: given a link ID returned by `zetui_register_link()`, return the registered URI string. Returns `NULL` if `id` is out of range. The pointer is owned by the library — do not free or mutate it.
+
 #### `zetui_draw_link`
 ```c
 void zetui_draw_link(zetui_ctx_t *ctx, int x, int y,

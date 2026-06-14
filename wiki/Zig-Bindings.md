@@ -123,6 +123,7 @@ tui.drawStr(1, 2, "palette orange", xterm_orange);
 | `ctx.setPointerShape(name)` | `zetui_set_pointer_shape()` |
 | `ctx.registerLink(uri) c_int` | `zetui_register_link()` |
 | `ctx.getLink(x, y) c_int` | `zetui_get_link_at()` |
+| `ctx.getLinkUri(id) ?[*:0]const u8` | `zetui_get_link_uri()` |
 | `ctx.drawLink(x, y, str, uri, style)` | `zetui_draw_link()` |
 
 ---

@@ -819,6 +819,16 @@ extern "C"
     int zetui_get_link_at (const zetui_ctx_t *ctx, int x, int y);
 
     /**
+     * @brief Reverse-lookup the URI registered for a link ID.
+     *
+     * @param ctx  Library context.
+     * @param id   Link ID returned by @c zetui_register_link().
+     * @return     The URI string, or @c NULL if @p id is out of range.
+     *             The pointer is owned by the library; do not free or mutate it.
+     */
+    const char *zetui_get_link_uri (const zetui_ctx_t *ctx, int id);
+
+    /**
      * @brief Change the mouse pointer sprite using OSC 22.
      *
      * @c name is an X11 cursor name such as @c "pointer" (hand) or
@@ -2573,6 +2583,14 @@ extern "C"
         if (!ctx || x < 0 || y < 0 || x >= ctx->width || y >= ctx->height)
             return 0;
         return ctx->front[y * ctx->width + x].link;
+    }
+
+    const char *
+    zetui_get_link_uri (const zetui_ctx_t *ctx, int id)
+    {
+        if (!ctx || id < 1 || id > ctx->link_count)
+            return (const char *)0;
+        return ctx->link_uris[id - 1];
     }
 
     void

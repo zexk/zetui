@@ -493,6 +493,11 @@ pub const Context = struct {
         return c.zetui_get_link_at(self.raw, x, y);
     }
 
+    /// Return the URI for a link ID (from registerLink); null if out of range.
+    pub fn getLinkUri(self: *const Context, id: c_int) ?[*:0]const u8 {
+        return c.zetui_get_link_uri(self.raw, id);
+    }
+
     /// Change the mouse pointer sprite via OSC 22 (e.g. "pointer", "default").
     pub fn setPointerShape(self: *Context, name: [*:0]const u8) void {
         c.zetui_set_pointer_shape(self.raw, name);
