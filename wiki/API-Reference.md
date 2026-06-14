@@ -269,6 +269,18 @@ void zetui_shutdown(zetui_ctx_t *ctx);
 ```
 Restore terminal state, disable all optional modes, and free `ctx`. Safe to call with `NULL`.
 
+#### `zetui_suspend`
+```c
+void zetui_suspend(zetui_ctx_t *ctx);
+```
+Suspend the TUI: disables mouse/focus/paste reporting, resets cursor and pointer shapes, leaves the alternate screen, restores the original termios, then raises `SIGSTOP`. The process is stopped until the shell sends `SIGCONT` (e.g. `fg`). Call `zetui_resume()` immediately after the process continues.
+
+#### `zetui_resume`
+```c
+void zetui_resume(zetui_ctx_t *ctx);
+```
+Resume the TUI after `zetui_suspend()`: re-enters raw mode, switches back to the alternate screen, and re-enables whichever of mouse/focus/paste were active before the suspend. Calls `zetui_invalidate()` so the next `zetui_present()` redraws the full screen.
+
 ---
 
 ### Terminal info

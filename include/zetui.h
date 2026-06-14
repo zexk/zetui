@@ -457,6 +457,31 @@ extern "C"
      */
     void zetui_shutdown (zetui_ctx_t *ctx);
 
+    /**
+     * @brief Suspend the TUI: restore the terminal and raise SIGSTOP.
+     *
+     * Disables mouse/focus/paste reporting, resets cursor and pointer shapes,
+     * leaves the alternate screen, restores the original termios, then raises
+     * SIGSTOP.  The calling process is stopped until the shell sends SIGCONT
+     * (e.g. with @c fg).  When the process is continued, @c zetui_resume()
+     * must be called to re-establish the TUI.
+     *
+     * @param ctx Initialised context.
+     */
+    void zetui_suspend (zetui_ctx_t *ctx);
+
+    /**
+     * @brief Resume the TUI after @c zetui_suspend().
+     *
+     * Re-enters raw mode, switches back to the alternate screen, and
+     * re-enables whichever of mouse/focus/paste were active before the
+     * suspend.  Calls @c zetui_invalidate() so the next @c zetui_present()
+     * redraws the full screen.
+     *
+     * @param ctx Initialised context.
+     */
+    void zetui_resume (zetui_ctx_t *ctx);
+
     /* --- Terminal info ------------------------------------------------ */
 
     /**
@@ -1058,6 +1083,11 @@ extern "C"
 
         /* Whether bracketed paste mode is enabled */
         int paste_on;
+
+        /* Saved feature state across zetui_suspend() / zetui_resume() */
+        int suspend_mouse;
+        int suspend_focus;
+        int suspend_paste;
 
         /* Hyperlink URI registry: IDs are 1-based; index 0 = ID 1 */
         char **link_uris;
@@ -1945,6 +1975,43 @@ extern "C"
         free (ctx->back);
         zetui__obuf_free (&ctx->out);
         free (ctx);
+    }
+
+    void
+    zetui_suspend (zetui_ctx_t *ctx)
+    {
+        if (!ctx)
+            return;
+        ctx->suspend_mouse = ctx->mouse_on;
+        ctx->suspend_focus = ctx->focus_on;
+        ctx->suspend_paste = ctx->paste_on;
+        zetui_paste_disable (ctx);
+        zetui_focus_disable (ctx);
+        zetui_mouse_disable (ctx);
+        zetui__write_all (ctx->fd_out, "\033[ q", 4u);
+        zetui__write_all (ctx->fd_out, "\033]22;\033\\", 7u);
+        zetui__write_all (ctx->fd_out, "\033[?25h\033[?1049l", 14u);
+        zetui__leave_raw (ctx->fd_in, &ctx->saved_termios);
+        raise (SIGSTOP);
+    }
+
+    void
+    zetui_resume (zetui_ctx_t *ctx)
+    {
+        if (!ctx)
+            return;
+        zetui__enter_raw (ctx->fd_in, &ctx->saved_termios);
+        zetui__write_all (ctx->fd_out, "\033[?1049h\033[?25l", 14u);
+        ctx->term_cursor_on = 0;
+        if (ctx->suspend_mouse)
+            zetui_mouse_enable (ctx);
+        if (ctx->suspend_focus)
+            zetui_focus_enable (ctx);
+        if (ctx->suspend_paste)
+            zetui_paste_enable (ctx);
+        if (ctx->cursor_shape != ZETUI_CURSOR_DEFAULT)
+            zetui_cursor_set_shape (ctx, ctx->cursor_shape);
+        zetui_invalidate (ctx);
     }
 
     int

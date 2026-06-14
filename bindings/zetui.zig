@@ -393,6 +393,16 @@ pub const Context = struct {
         c.zetui_shutdown(self.raw);
     }
 
+    /// Suspend the TUI (SIGSTOP). Call resumeTui() when the process continues.
+    pub fn suspendTui(self: *Context) void {
+        c.zetui_suspend(self.raw);
+    }
+
+    /// Restore the TUI after suspendTui().
+    pub fn resumeTui(self: *Context) void {
+        c.zetui_resume(self.raw);
+    }
+
     pub fn width(self: *const Context) i32 {
         return c.zetui_width(self.raw);
     }

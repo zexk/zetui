@@ -88,6 +88,8 @@ tui.drawStr(1, 2, "palette orange", xterm_orange);
 |---|---|
 | `Context.init() !Context` | `zetui_init_ex()` |
 | `ctx.deinit()` | `zetui_shutdown()` |
+| `ctx.suspendTui()` | `zetui_suspend()` |
+| `ctx.resumeTui()` | `zetui_resume()` |
 | `ctx.width() i32` | `zetui_width()` |
 | `ctx.height() i32` | `zetui_height()` |
 | `ctx.colorSupport() ColorSupport` | `zetui_color_support()` |
