@@ -350,6 +350,7 @@ fn panelInput(
                 .press => "press",
                 .release => "release",
                 .motion => "motion (drag)",
+                .hover => "hover",
                 .wheel_up => "wheel up",
                 .wheel_down => "wheel down",
             }, val);

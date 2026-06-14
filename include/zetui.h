@@ -308,7 +308,8 @@ extern "C"
         ZETUI_MOUSE_RELEASE = 1,   /**< Button released. */
         ZETUI_MOUSE_MOTION = 2,    /**< Movement with a button held (drag). */
         ZETUI_MOUSE_WHEEL_UP = 3,  /**< Wheel scrolled up. */
-        ZETUI_MOUSE_WHEEL_DOWN = 4 /**< Wheel scrolled down. */
+        ZETUI_MOUSE_WHEEL_DOWN = 4,/**< Wheel scrolled down. */
+        ZETUI_MOUSE_HOVER = 5      /**< Cursor movement with no button held. */
     } zetui_mouse_action_t;
 
     /** @brief Which button a mouse event refers to. */
@@ -2323,7 +2324,9 @@ extern "C"
                                                 break;
                                             }
                                         if (code & 32)
-                                            me->action = ZETUI_MOUSE_MOTION;
+                                            me->action = ((code & 3) == 3)
+                                                             ? ZETUI_MOUSE_HOVER
+                                                             : ZETUI_MOUSE_MOTION;
                                         else
                                             me->action
                                                 = (final == (unsigned char)'M')

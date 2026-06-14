@@ -194,7 +194,7 @@ int height;  // new terminal height in rows
 
 **`zetui_mouse_event_t`** (requires `zetui_mouse_enable()`)
 ```c
-zetui_mouse_action_t action;  // PRESS / RELEASE / MOTION / WHEEL_UP / WHEEL_DOWN
+zetui_mouse_action_t action;  // PRESS / RELEASE / MOTION / WHEEL_UP / WHEEL_DOWN / HOVER
 zetui_mouse_button_t button;  // NONE / LEFT / MIDDLE / RIGHT
 int x;         // column (0-based)
 int y;         // row (0-based)

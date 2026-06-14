@@ -695,6 +695,9 @@ panel_input (zetui_ctx_t *ctx, int x, int y, int w, int h, zetui_event_t *last,
                 case ZETUI_MOUSE_MOTION:
                     act = "motion (drag)";
                     break;
+                case ZETUI_MOUSE_HOVER:
+                    act = "hover";
+                    break;
                 case ZETUI_MOUSE_WHEEL_UP:
                     act = "wheel up";
                     break;

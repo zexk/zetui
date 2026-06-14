@@ -259,6 +259,7 @@ pub const MouseAction = enum(c_int) {
     motion = c.ZETUI_MOUSE_MOTION,
     wheel_up = c.ZETUI_MOUSE_WHEEL_UP,
     wheel_down = c.ZETUI_MOUSE_WHEEL_DOWN,
+    hover = c.ZETUI_MOUSE_HOVER,
 };
 
 pub const MouseButton = enum(c_int) {
