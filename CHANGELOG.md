@@ -4,7 +4,7 @@ All notable changes to zetui are documented here. Versions correspond to git
 tags; this project does not bump `build.zig.zon`'s `.version` field per
 release — that field is fixed at `0.1.0` and is not the source of truth.
 
-## [Unreleased] — v0.4.1
+## [v0.4.1] — 2026-06-16
 
 ### Fixed
 - **Security:** `zetui_set_title`, `zetui_set_icon_title`, `zetui_set_pointer_shape`,
