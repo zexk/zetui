@@ -1,8 +1,9 @@
 # Changelog
 
 All notable changes to zetui are documented here. Versions correspond to git
-tags; this project does not bump `build.zig.zon`'s `.version` field per
-release — that field is fixed at `0.1.0` and is not the source of truth.
+tags; `build.zig.zon`'s `.version` field is kept in sync with the latest tag
+starting from v0.4.1 (releases prior to that left it at the placeholder
+`0.1.0`).
 
 ## [v0.4.1] — 2026-06-16
 
