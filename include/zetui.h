@@ -818,7 +818,9 @@ extern "C"
      * @brief Set the terminal window title.
      *
      * Sends @c OSC 2 ; title ST. Accepted by most modern terminal emulators.
-     * @c title must be NUL-terminated and should not contain control bytes.
+     * @c title must be NUL-terminated. No-op if @p title is NULL or contains
+     * a C0 control byte (including ESC or BEL) or DEL, since either could
+     * terminate the OSC sequence early and inject escape sequences.
      * @param ctx   Initialised context.
      * @param title NUL-terminated title string.
      */
@@ -829,8 +831,10 @@ extern "C"
      *
      * Sends @c OSC 1 ; title ST. Historically sets the icon name shown in
      * taskbars and minimised windows; many terminals map it to the same label
-     * as OSC 2. @c title must be NUL-terminated and should not contain
-     * control bytes.
+     * as OSC 2. @c title must be NUL-terminated. No-op if @p title is NULL
+     * or contains a C0 control byte (including ESC or BEL) or DEL, since
+     * either could terminate the OSC sequence early and inject escape
+     * sequences.
      * @param ctx   Initialised context.
      * @param title NUL-terminated title string.
      */
@@ -853,8 +857,12 @@ extern "C"
      *
      * IDs are deduplicated — registering the same URI twice returns the same
      * ID.  The library copies @c uri internally; the caller does not need to
-     * keep it alive after this call.  Returns 0 on failure (NULL uri or
-     * out of memory).
+     * keep it alive after this call.  Returns 0 on failure: NULL or empty
+     * uri, out of memory, or @c uri contains a C0 control byte (including
+     * ESC or BEL) or DEL — any of which could terminate the OSC 8 sequence
+     * that @c zetui_present() emits for this link and inject escape
+     * sequences, which matters since URIs often come from rendered,
+     * untrusted content.
      */
     int zetui_register_link (zetui_ctx_t *ctx, const char *uri);
 
@@ -896,6 +904,9 @@ extern "C"
      * Honoured by kitty, foot, and other modern terminals; silently ignored
      * by terminals that do not support OSC 22 (e.g. alacritty).
      * @c zetui_shutdown() resets the pointer to the default automatically.
+     * No-op if @p name contains a C0 control byte (including ESC or BEL)
+     * or DEL, since either could terminate the OSC sequence early and
+     * inject escape sequences.
      */
     void zetui_set_pointer_shape (zetui_ctx_t *ctx, const char *name);
 
@@ -2139,10 +2150,29 @@ extern "C"
         ctx->cursor_shape = shape;
     }
 
+    /* True if s contains a C0 control byte (including ESC and BEL) or
+       DEL. Either can terminate an OSC sequence early (xterm accepts
+       both ST and BEL as terminators) and smuggle attacker-controlled
+       bytes into the escape stream, so callers passing untrusted text
+       (e.g. a hyperlink URI from rendered content) must be rejected
+       rather than written verbatim. */
+    static int
+    zetui__has_ctrl (const char *s)
+    {
+        const unsigned char *p = (const unsigned char *)s;
+        while (*p)
+            {
+                if (*p < 0x20u || *p == 0x7Fu)
+                    return 1;
+                p++;
+            }
+        return 0;
+    }
+
     void
     zetui_set_title (zetui_ctx_t *ctx, const char *title)
     {
-        if (!title)
+        if (!title || zetui__has_ctrl (title))
             return;
         zetui__write_all (ctx->fd_out, "\033]2;", 4u);
         zetui__write_all (ctx->fd_out, title, strlen (title));
@@ -2152,7 +2182,7 @@ extern "C"
     void
     zetui_set_icon_title (zetui_ctx_t *ctx, const char *title)
     {
-        if (!title)
+        if (!title || zetui__has_ctrl (title))
             return;
         zetui__write_all (ctx->fd_out, "\033]1;", 4u);
         zetui__write_all (ctx->fd_out, title, strlen (title));
@@ -2706,7 +2736,7 @@ extern "C"
         int i;
         char **tmp;
         char *copy;
-        if (!uri || !*uri)
+        if (!uri || !*uri || zetui__has_ctrl (uri))
             return 0;
         for (i = 0; i < ctx->link_count; i++)
             if (strcmp (ctx->link_uris[i], uri) == 0)
@@ -2748,8 +2778,10 @@ extern "C"
     void
     zetui_set_pointer_shape (zetui_ctx_t *ctx, const char *name)
     {
-        if (!name || !*name)
+        if (!name)
             name = "";
+        if (zetui__has_ctrl (name))
+            return;
         /* OSC 22 ; <name> ST */
         zetui__write_all (ctx->fd_out, "\033]22;", 5u);
         zetui__write_all (ctx->fd_out, name, strlen (name));

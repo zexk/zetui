@@ -504,13 +504,13 @@ Set the hardware cursor shape via DECSCUSR (`CSI Ps SP q`). Takes effect immedia
 ```c
 void zetui_set_title(zetui_ctx_t *ctx, const char *title);
 ```
-Set the terminal window title via OSC 2. The string must be NUL-terminated and must not contain control bytes. Accepted by most modern terminal emulators.
+Set the terminal window title via OSC 2. The string must be NUL-terminated. No-op if `title` is `NULL` or contains a C0 control byte (including ESC or BEL) or DEL — either could terminate the OSC sequence early and inject escape sequences, so these are rejected rather than written verbatim. Accepted by most modern terminal emulators.
 
 #### `zetui_set_icon_title`
 ```c
 void zetui_set_icon_title(zetui_ctx_t *ctx, const char *title);
 ```
-Set the terminal icon/taskbar title via OSC 1. Historically controls the label shown in taskbars and minimised windows; many terminals treat it the same as OSC 2. The string must be NUL-terminated and must not contain control bytes.
+Set the terminal icon/taskbar title via OSC 1. Historically controls the label shown in taskbars and minimised windows; many terminals treat it the same as OSC 2. The string must be NUL-terminated. No-op if `title` is `NULL` or contains a C0 control byte (including ESC or BEL) or DEL, for the same reason as `zetui_set_title`.
 
 #### `zetui_set_clipboard`
 ```c
@@ -522,13 +522,13 @@ Copy a NUL-terminated UTF-8 string to the system clipboard via OSC 52. Internall
 ```c
 void zetui_set_pointer_shape(zetui_ctx_t *ctx, const char *name);
 ```
-Change the mouse pointer sprite via OSC 22. `name` is an X11 cursor name such as `"pointer"` (hand) or `"default"` (arrow). Honoured by kitty, foot, and other modern terminals; silently ignored by terminals that do not support OSC 22. `zetui_shutdown()` resets the pointer automatically.
+Change the mouse pointer sprite via OSC 22. `name` is an X11 cursor name such as `"pointer"` (hand) or `"default"` (arrow). Honoured by kitty, foot, and other modern terminals; silently ignored by terminals that do not support OSC 22. No-op if `name` contains a C0 control byte (including ESC or BEL) or DEL. `zetui_shutdown()` resets the pointer automatically.
 
 #### `zetui_register_link`
 ```c
 int zetui_register_link(zetui_ctx_t *ctx, const char *uri);
 ```
-Register a hyperlink URI and return a stable ID (1-based). Registering the same URI twice returns the same ID. The library copies `uri` internally — the caller does not need to keep it alive after this call. Returns 0 on failure (`NULL` uri or out of memory). The URI table grows dynamically with no hard cap.
+Register a hyperlink URI and return a stable ID (1-based). Registering the same URI twice returns the same ID. The library copies `uri` internally — the caller does not need to keep it alive after this call. Returns 0 on failure: `NULL` or empty uri, out of memory, or `uri` contains a C0 control byte (including ESC or BEL) or DEL — any of which could terminate the OSC 8 sequence `zetui_present()` emits for this link and inject escape sequences, which matters since URIs often come from rendered, untrusted content. The URI table grows dynamically with no hard cap.
 
 #### `zetui_get_link_at`
 ```c
