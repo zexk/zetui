@@ -102,4 +102,4 @@ Provides: zig, zls, gcc, gdb, valgrind, bear, clang-tools.
 LICENSE
 -------
 
-Unlicense (public domain) — see https://unlicense.org
+Unlicense (public domain), see https://unlicense.org
